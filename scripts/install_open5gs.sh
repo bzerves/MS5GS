@@ -21,9 +21,40 @@ fi
 # Load configuration
 source /etc/open5gs/install.conf
 
-sudo add-apt-repository ppa:open5gs/latest
-sudo apt update
-sudo apt install open5gs
+# Detect OS and set repository accordingly
+echo -e "\n${YELLOW}Detecting OS and adding Open5GS repository...${NC}"
+if [ -f /etc/os-release ]; then
+    source /etc/os-release
+    if [[ "$ID" == "ubuntu" ]]; then
+        echo -e "${YELLOW}Detected Ubuntu. Adding Open5GS PPA...${NC}"
+        apt-get install -y software-properties-common
+        add-apt-repository -y ppa:open5gs/latest
+    elif [[ "$ID" == "debian" ]]; then
+        echo -e "${YELLOW}Detected Debian. Adding Open5GS repository...${NC}"
+        apt-get install -y wget gnupg
+        mkdir -p /etc/apt/keyrings
+        wget -qO - https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_12/Release.key | gpg --dearmor -o /etc/apt/keyrings/open5gs.gpg
+        echo "deb [signed-by=/etc/apt/keyrings/open5gs.gpg] http://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_12/ ./" > /etc/apt/sources.list.d/open5gs.list
+    else
+        echo -e "${RED}Unsupported OS: $ID${NC}"
+        exit 1
+    fi
+else
+    echo -e "${RED}Could not determine OS type${NC}"
+    exit 1
+fi
+
+echo -e "${YELLOW}Updating package lists...${NC}"
+apt update || {
+    echo -e "${RED}Failed to update package lists${NC}"
+    exit 1
+}
+
+echo -e "${YELLOW}Installing Open5GS...${NC}" 
+apt install -y open5gs || {
+    echo -e "${RED}Failed to install Open5GS${NC}"
+    exit 1
+}
 
 # Configure Open5GS
 echo -e "${GREEN}Configuring Open5GS MME...${NC}"
