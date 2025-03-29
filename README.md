@@ -26,7 +26,7 @@ Rapid5GS is a comprehensive installation and configuration tool for Open5GS on U
 
 1. Install Ubuntu Server 24.04 LTS or Debian on a server with two network interfaces.
 
-2.) Setup sudo utility and add your user to it.
+2. Setup sudo utility and add your user to it.
 
 3. Run the following one-liner command as a user with sudo privileges:
 ```bash
