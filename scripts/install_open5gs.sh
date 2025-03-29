@@ -161,13 +161,47 @@ else
     echo -e "GTPC Address: $(grep -A 2 'gtpc:' /etc/open5gs/mme.yaml | grep 'address:')"
 fi
 
-# Restart Open5GS services
-echo -e "${GREEN}Restarting Open5GS MME service...${NC}"
-sudo systemctl restart open5gs-mmed
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}Open5GS MME service restarted successfully.${NC}"
+# Check and remove NO_TLS option from freeDiameter config files
+echo -e "${YELLOW}Checking and removing NO_TLS option from freeDiameter config files...${NC}"
+
+# Check for MME freeDiameter config
+if [ -f /etc/freeDiameter/mme.conf ]; then
+    echo -e "${YELLOW}Checking /etc/freeDiameter/mme.conf for NO_TLS option...${NC}"
+    
+    # Backup the file before making changes
+    cp /etc/freeDiameter/mme.conf /etc/freeDiameter/mme.conf.bak
+    
+    # Remove NO_TLS option from ConnectPeer sections
+    sed -i 's/ConnectPeer.*NO_TLS/ConnectPeer/g' /etc/freeDiameter/mme.conf
+    
+    # Check if changes were made
+    if cmp -s /etc/freeDiameter/mme.conf /etc/freeDiameter/mme.conf.bak; then
+        echo -e "${GREEN}No NO_TLS option found in mme.conf.${NC}"
+    else
+        echo -e "${GREEN}Successfully removed NO_TLS option from mme.conf.${NC}"
+    fi
 else
-    echo -e "${RED}Failed to restart Open5GS MME service. Please check the service status.${NC}"
+    echo -e "${YELLOW}/etc/freeDiameter/mme.conf file not found.${NC}"
+fi
+
+# Check for HSS freeDiameter config
+if [ -f /etc/freeDiameter/hss.conf ]; then
+    echo -e "${YELLOW}Checking /etc/freeDiameter/hss.conf for NO_TLS option...${NC}"
+    
+    # Backup the file before making changes
+    cp /etc/freeDiameter/hss.conf /etc/freeDiameter/hss.conf.bak
+    
+    # Remove NO_TLS option from ConnectPeer sections
+    sed -i 's/ConnectPeer.*NO_TLS/ConnectPeer/g' /etc/freeDiameter/hss.conf
+    
+    # Check if changes were made
+    if cmp -s /etc/freeDiameter/hss.conf /etc/freeDiameter/hss.conf.bak; then
+        echo -e "${GREEN}No NO_TLS option found in hss.conf.${NC}"
+    else
+        echo -e "${GREEN}Successfully removed NO_TLS option from hss.conf.${NC}"
+    fi
+else
+    echo -e "${YELLOW}/etc/freeDiameter/hss.conf file not found.${NC}"
 fi
 
 # Configure SMF
@@ -278,17 +312,6 @@ echo -e "${GREEN}SGW-U parameters updated using awk method${NC}"
 # Clean up temporary files
 rm -f $TMP_FILE ${TMP_FILE}.new
 
-# Restart Open5GS SMF and SGW-U services
-echo -e "${GREEN}Restarting Open5GS SMF and SGW-U services...${NC}"
-sudo systemctl restart open5gs-smfd
-sudo systemctl restart open5gs-sgwud
-
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}Open5GS SMF and SGW-U services restarted successfully.${NC}"
-else
-    echo -e "${RED}Failed to restart some services. Please check service status.${NC}"
-fi
-
 # Check and install iptables if needed (especially for Debian)
 echo -e "${YELLOW}Checking if iptables is installed...${NC}"
 if ! command -v iptables &> /dev/null; then
@@ -356,3 +379,14 @@ elif command -v iptables-save &> /dev/null; then
 else
     echo -e "${RED}Neither netfilter-persistent nor iptables-save found. Firewall rules will not persist after reboot${NC}"
 fi
+
+# Restart all Open5GS services
+echo -e "${GREEN}Restarting all Open5GS services...${NC}"
+for service in open5gs-mmed open5gs-sgwcd open5gs-smfd open5gs-amfd open5gs-sgwud open5gs-upfd open5gs-hssd open5gs-pcrfd open5gs-nrfd open5gs-ausfd open5gs-udmd open5gs-pcfd open5gs-nssfd open5gs-bsfd open5gs-udrd; do
+    if systemctl is-enabled --quiet $service 2>/dev/null; then
+        echo -e "${YELLOW}Restarting $service...${NC}"
+        systemctl restart $service
+    fi
+done
+
+echo -e "${GREEN}Open5GS installation and configuration completed successfully.${NC}"
