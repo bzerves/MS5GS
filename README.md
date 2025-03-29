@@ -11,7 +11,7 @@
 ```
 # Rapid5GS
 
-Rapid5GS is a comprehensive installation and configuration tool for Open5GS on Ubuntu 24.04 LTS. It automates the setup of a mobility core network using Open5GS, including all necessary dependencies and configurations.
+Rapid5GS is a comprehensive installation and configuration tool for Open5GS on Ubuntu 24.04 LTS or Debian 12. It automates the setup of a mobility core network using Open5GS, including all necessary dependencies and configurations.
 
 ## Prerequisites
 
@@ -24,9 +24,11 @@ Rapid5GS is a comprehensive installation and configuration tool for Open5GS on U
 
 ## Installation
 
-1. Install Ubuntu Server 24.04 LTS on a server with two network interfaces.
+1. Install Ubuntu Server 24.04 LTS or Debian on a server with two network interfaces.
 
-2. Run the following one-liner command as a user with sudo privileges:
+2.) Setup sudo utility and add your user to it.
+
+3. Run the following one-liner command as a user with sudo privileges:
 ```bash
 git clone https://github.com/joshualambert/rapid5gs.git && cd rapid5gs && chmod +x install.sh && sudo ./install.sh
 ```
@@ -37,7 +39,7 @@ The installation script provides the following options:
 
 1. **Check System Requirements**
    - Verifies system compatibility
-   - Checks Ubuntu 24.04 version
+   - Confirms running on supported Debian 12 or Ubuntu 24.04 LTS Linux.
    - Validates network interfaces
    - Ensures sufficient RAM and storage
 
@@ -82,7 +84,7 @@ The installation script provides the following options:
 
 ## Usage
 
-It is intended that you'll install Ubuntu Server 24.04 LTS on a server with two network interfaces. Then run this script, one step at a time in order, to fully deploy this core. It is expected that the upstream routers from this EPC will assign both NICs a static IP address via DHCP. No need to configure those on the EPC itself - let routers route!
+It is intended that you'll install Ubuntu Server 24.04 LTS or Debian 12 on a server with two network interfaces. Then run this script, one step at a time in order, to fully deploy this core. It is expected that the upstream routers from this EPC will assign both NICs a static IP address via DHCP. No need to configure those on the EPC itself - let routers route!
 
 ## Configuration Files
 
