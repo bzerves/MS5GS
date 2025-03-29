@@ -24,12 +24,28 @@ curl -fsSL https://pgp.mongodb.com/server-8.0.asc | gpg -o /usr/share/keyrings/m
     exit 1
 }
 
-# Create MongoDB repository list file
-echo -e "\n${YELLOW}Adding MongoDB repository...${NC}"
-echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/8.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-8.0.list || {
-    echo -e "${RED}✗ Failed to create MongoDB repository list${NC}"
+# Detect OS and set repository accordingly
+echo -e "\n${YELLOW}Detecting OS and adding MongoDB repository...${NC}"
+if [ -f /etc/os-release ]; then
+    source /etc/os-release
+    if [[ "$ID" == "ubuntu" ]]; then
+        echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/8.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-8.0.list || {
+            echo -e "${RED}✗ Failed to create MongoDB repository list${NC}"
+            exit 1
+        }
+    elif [[ "$ID" == "debian" ]]; then
+        echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/debian bookworm/mongodb-org/8.0 main" | tee /etc/apt/sources.list.d/mongodb-org-8.0.list || {
+            echo -e "${RED}✗ Failed to create MongoDB repository list${NC}"
+            exit 1
+        }
+    else
+        echo -e "${RED}✗ Unsupported OS: $ID${NC}"
+        exit 1
+    fi
+else
+    echo -e "${RED}✗ Could not determine OS type${NC}"
     exit 1
-}
+fi
 
 # Update package list and install MongoDB
 echo -e "\n${YELLOW}Installing MongoDB...${NC}"
