@@ -177,28 +177,46 @@ else
     echo -e "${RED}Failed to restart Open5GS MME service. Please check the service status.${NC}"
 fi
 
+# Check and install iptables if needed (especially for Debian)
+echo -e "${YELLOW}Checking if iptables is installed...${NC}"
+if ! command -v iptables &> /dev/null; then
+    echo -e "${YELLOW}iptables not found. Installing iptables and related packages...${NC}"
+    # Set non-interactive frontend to avoid prompts
+    export DEBIAN_FRONTEND=noninteractive
+    # Pre-set answers for iptables-persistent
+    echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
+    echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
+    # Install packages
+    apt install -y iptables iptables-persistent netfilter-persistent || {
+        echo -e "${RED}Failed to install iptables${NC}"
+        exit 1
+    }
+    # Create rules directories if they don't exist
+    mkdir -p /etc/iptables
+fi
+
 # Configure IP forwarding and firewall rules
 echo -e "${GREEN}Configuring IP forwarding and firewall rules...${NC}"
 
 # Enable IPv4/IPv6 forwarding
 echo -e "${YELLOW}Enabling IPv4/IPv6 forwarding...${NC}"
-sudo sysctl -w net.ipv4.ip_forward=1
-sudo sysctl -w net.ipv6.conf.all.forwarding=1
+sysctl -w net.ipv4.ip_forward=1
+sysctl -w net.ipv6.conf.all.forwarding=1
 
 # Make IP forwarding persistent
-echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/30-ipforward.conf
-echo "net.ipv6.conf.all.forwarding=1" | sudo tee -a /etc/sysctl.d/30-ipforward.conf
+echo "net.ipv4.ip_forward=1" | tee /etc/sysctl.d/30-ipforward.conf
+echo "net.ipv6.conf.all.forwarding=1" | tee -a /etc/sysctl.d/30-ipforward.conf
 
 # Add NAT rules
 echo -e "${YELLOW}Adding NAT rules...${NC}"
-sudo iptables -t nat -A POSTROUTING -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE
-sudo ip6tables -t nat -A POSTROUTING -s 2001:db8:cafe::/48 ! -o ogstun -j MASQUERADE
+iptables -t nat -A POSTROUTING -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE
+ip6tables -t nat -A POSTROUTING -s 2001:db8:cafe::/48 ! -o ogstun -j MASQUERADE
 
 # Configure firewall
 echo -e "${YELLOW}Configuring firewall...${NC}"
 if command -v ufw >/dev/null 2>&1; then
     echo -e "${YELLOW}Disabling UFW firewall...${NC}"
-    sudo ufw disable
+    ufw disable
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ UFW firewall disabled successfully${NC}"
     else
@@ -208,16 +226,21 @@ fi
 
 # Add security rules
 echo -e "${YELLOW}Adding security rules...${NC}"
-sudo iptables -I INPUT -i ogstun -j ACCEPT
-sudo iptables -I INPUT -s 10.45.0.0/16 -j DROP
-sudo ip6tables -I INPUT -s 2001:db8:cafe::/48 -j DROP
+iptables -I INPUT -i ogstun -j ACCEPT
+iptables -I INPUT -s 10.45.0.0/16 -j DROP
+ip6tables -I INPUT -s 2001:db8:cafe::/48 -j DROP
 
 # Make iptables rules persistent
 echo -e "${YELLOW}Making iptables rules persistent...${NC}"
-if command -v iptables-save >/dev/null 2>&1; then
-    sudo iptables-save | sudo tee /etc/iptables/rules.v4
-    sudo ip6tables-save | sudo tee /etc/iptables/rules.v6
+if command -v netfilter-persistent &> /dev/null; then
+    echo -e "${YELLOW}Using netfilter-persistent to save rules...${NC}"
+    netfilter-persistent save || {
+        echo -e "${RED}Failed to save firewall rules using netfilter-persistent${NC}"
+    }
+elif command -v iptables-save &> /dev/null; then
+    iptables-save > /etc/iptables/rules.v4
+    ip6tables-save > /etc/iptables/rules.v6
     echo -e "${GREEN}✓ Firewall rules saved successfully${NC}"
 else
-    echo -e "${RED}iptables-save not found. Firewall rules will not persist after reboot${NC}"
+    echo -e "${RED}Neither netfilter-persistent nor iptables-save found. Firewall rules will not persist after reboot${NC}"
 fi
