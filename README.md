@@ -15,7 +15,7 @@ Rapid5GS is a comprehensive installation and configuration tool for Open5GS on U
 
 ## Prerequisites
 
-- Ubuntu 24.04 LTS
+- Ubuntu Server 24.04 LTS or Debian 12
 - Root privileges (sudo access)
 - Internet connection
 - At least 4GB RAM
