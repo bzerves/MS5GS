@@ -1,4 +1,3 @@
-```
   _____                    _       _   _____    _____    _____ 
  |  __ \                  (_)     | | | ____|  / ____|  / ____|
  | |__) |   __ _   _ __    _    __| | | |__   | |  __  | (___  
@@ -7,8 +6,8 @@
  |_|  \_\  \__,_| | .__/  |_|  \__,_| |____/   \_____| |_____/ 
                   | |                                          
                   |_|                                          
-```
 
+```
 # Rapid5GS
 
 Rapid5GS is a comprehensive installation and configuration tool for Open5GS on Ubuntu 24.04 LTS. It automates the setup of a mobility core network using Open5GS, including all necessary dependencies and configurations.
@@ -24,20 +23,11 @@ Rapid5GS is a comprehensive installation and configuration tool for Open5GS on U
 
 ## Installation
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/rapid5gs.git
-cd rapid5gs
-```
+1. Install Ubuntu Server 24.04 LTS on a server with two network interfaces.
 
-2. Make the installation script executable:
+2. Run the following one-liner command as a user with sudo privileges:
 ```bash
-chmod +x install.sh
-```
-
-3. Run the installation script:
-```bash
-sudo ./install.sh
+git clone https://github.com/joshualambert/rapid5gs.git && cd rapid5gs && chmod +x install.sh && sudo ./install.sh
 ```
 
 ## Installation Menu Options
