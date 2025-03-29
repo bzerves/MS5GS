@@ -71,11 +71,11 @@ sudo cp /etc/open5gs/mme.yaml /etc/open5gs/mme.yaml.bak
 
 # Update mme.yaml with values from install.conf
 echo -e "${YELLOW}Setting MCC: $MCC, MNC: $MNC, TAC: $TAC${NC}"
-echo -e "${YELLOW}Setting S1AP IP: $S1_IP, GTPU IP: $MGMT_IP${NC}"
+echo -e "${YELLOW}Setting Management IP: $MGMT_IP, User WAN IP: $USER_WAN_IP${NC}"
 
 # Strip any CIDR notation from IP addresses if present
-S1_IP_CLEAN=$(echo "$S1_IP" | sed -E 's/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+).*/\1/')
-MGMT_IP_CLEAN=$(echo "$MGMT_IP" | sed -E 's/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+S1_MANAGEMENT_IP_CLEAN=$(echo "$MGMT_IP" | sed -E 's/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+USER_WAN_IP_CLEAN=$(echo "$USER_WAN_IP" | sed -E 's/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+).*/\1/')
 
 # Use awk for all parameter updates
 echo -e "${YELLOW}Using awk for all parameter updates...${NC}"
@@ -85,7 +85,7 @@ TMP_FILE=$(mktemp)
 cat /etc/open5gs/mme.yaml > $TMP_FILE
 
 # Update all values with a single awk command
-awk -v mcc="$MCC" -v mnc="$MNC" -v tac="$TAC" -v s1_ip="$S1_IP_CLEAN" -v mgmt_ip="$MGMT_IP_CLEAN" '
+awk -v mcc="$MCC" -v mnc="$MNC" -v tac="$TAC" -v mgmt_ip="$S1_MANAGEMENT_IP_CLEAN" -v user_wan_ip="$USER_WAN_IP_CLEAN" '
 # Track context within the YAML structure
 /mme:/ { in_mme=1 }
 /s1ap:/ && in_mme { in_s1ap=1; in_gummei=0; in_tai=0 }
@@ -126,9 +126,9 @@ awk -v mcc="$MCC" -v mnc="$MNC" -v tac="$TAC" -v s1_ip="$S1_IP_CLEAN" -v mgmt_ip
     sub(/tac: [0-9]+/, "tac: " tac);
 }
 
-# Update S1AP server address
+# Update S1AP server address (using management IP)
 /address:/ && in_s1ap_server {
-    sub(/address: 127\.0\.0\.2/, "address: " s1_ip);
+    sub(/address: 127\.0\.0\.2/, "address: " mgmt_ip);
     in_s1ap_server=0;  # Only replace first address in s1ap section
 }
 
@@ -147,8 +147,7 @@ rm -f $TMP_FILE ${TMP_FILE}.new
 if grep -q "mcc: $MCC" /etc/open5gs/mme.yaml && \
    grep -q "mnc: $MNC" /etc/open5gs/mme.yaml && \
    grep -q "tac: $TAC" /etc/open5gs/mme.yaml && \
-   grep -q "address: $S1_IP_CLEAN" /etc/open5gs/mme.yaml && \
-   grep -q "address: $MGMT_IP_CLEAN" /etc/open5gs/mme.yaml; then
+   grep -q "address: $S1_MANAGEMENT_IP_CLEAN" /etc/open5gs/mme.yaml; then
     echo -e "${GREEN}MME configuration updated successfully.${NC}"
 else
     echo -e "${RED}Failed to update some MME configuration values. Please check /etc/open5gs/mme.yaml manually.${NC}"
@@ -163,12 +162,131 @@ else
 fi
 
 # Restart Open5GS services
-echo -e "${GREEN}Restarting Open5GS services...${NC}"
+echo -e "${GREEN}Restarting Open5GS MME service...${NC}"
 sudo systemctl restart open5gs-mmed
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}Open5GS MME service restarted successfully.${NC}"
 else
     echo -e "${RED}Failed to restart Open5GS MME service. Please check the service status.${NC}"
+fi
+
+# Configure SMF
+echo -e "${GREEN}Configuring Open5GS SMF...${NC}"
+
+# Check if the configuration files exist
+if [ ! -f /etc/open5gs/smf.yaml ]; then
+    echo -e "${RED}SMF configuration file not found at /etc/open5gs/smf.yaml${NC}"
+    exit 1
+fi
+
+# Backup the original configuration
+echo -e "${YELLOW}Backing up original SMF configuration...${NC}"
+sudo cp /etc/open5gs/smf.yaml /etc/open5gs/smf.yaml.bak
+
+# Create a temporary file for SMF config
+TMP_FILE=$(mktemp)
+cat /etc/open5gs/smf.yaml > $TMP_FILE
+
+# Update SMF values with a single awk command
+awk -v mgmt_ip="$S1_MANAGEMENT_IP_CLEAN" -v user_wan_ip="$USER_WAN_IP_CLEAN" '
+# Track context within the YAML structure
+/smf:/ { in_smf=1 }
+/gtpc:/ && in_smf { in_gtpc=1; in_gtpu=0; in_pfcp=0 }
+/gtpu:/ && in_smf { in_gtpc=0; in_gtpu=1; in_pfcp=0 }
+/pfcp:/ && in_smf { in_gtpc=0; in_gtpu=0; in_pfcp=1 }
+/server:/ && in_gtpc { in_gtpc_server=1 }
+/server:/ && in_gtpu { in_gtpu_server=1 }
+/server:/ && in_pfcp { in_pfcp_server=1 }
+/client:/ { in_gtpc_server=0; in_gtpu_server=0; in_pfcp_server=0 }
+
+# Update GTPC server address (management IP for control plane)
+/address:/ && in_gtpc_server {
+    sub(/address: 127\.0\.0\.4/, "address: " mgmt_ip);
+    in_gtpc_server=0;
+}
+
+# Update GTPU server address (user WAN IP for user traffic)
+/address:/ && in_gtpu_server {
+    sub(/address: 127\.0\.0\.4/, "address: " user_wan_ip);
+    in_gtpu_server=0;
+}
+
+# Update PFCP server address (management IP for control plane)
+/address:/ && in_pfcp_server {
+    sub(/address: 127\.0\.0\.4/, "address: " mgmt_ip);
+    in_pfcp_server=0;
+}
+
+# Print the current line (modified or not)
+{ print }
+' $TMP_FILE > ${TMP_FILE}.new
+
+# Apply the changes
+sudo cp ${TMP_FILE}.new /etc/open5gs/smf.yaml
+echo -e "${GREEN}SMF parameters updated using awk method${NC}"
+
+# Clean up temporary files
+rm -f $TMP_FILE ${TMP_FILE}.new
+
+# Configure SGW-U
+echo -e "${GREEN}Configuring Open5GS SGW-U...${NC}"
+
+# Check if the configuration files exist
+if [ ! -f /etc/open5gs/sgwu.yaml ]; then
+    echo -e "${RED}SGW-U configuration file not found at /etc/open5gs/sgwu.yaml${NC}"
+    exit 1
+fi
+
+# Backup the original configuration
+echo -e "${YELLOW}Backing up original SGW-U configuration...${NC}"
+sudo cp /etc/open5gs/sgwu.yaml /etc/open5gs/sgwu.yaml.bak
+
+# Create a temporary file for SGW-U config
+TMP_FILE=$(mktemp)
+cat /etc/open5gs/sgwu.yaml > $TMP_FILE
+
+# Update SGW-U values with a single awk command
+awk -v mgmt_ip="$S1_MANAGEMENT_IP_CLEAN" -v user_wan_ip="$USER_WAN_IP_CLEAN" '
+# Track context within the YAML structure
+/sgwu:/ { in_sgwu=1 }
+/gtpu:/ && in_sgwu { in_gtpu=1; in_pfcp=0 }
+/pfcp:/ && in_sgwu { in_gtpu=0; in_pfcp=1 }
+/server:/ && in_gtpu { in_gtpu_server=1 }
+/server:/ && in_pfcp { in_pfcp_server=1 }
+/client:/ { in_gtpu_server=0; in_pfcp_server=0 }
+
+# Update GTPU server address (user WAN IP for user traffic)
+/address:/ && in_gtpu_server {
+    sub(/address: 127\.0\.0\.3/, "address: " user_wan_ip);
+    in_gtpu_server=0;
+}
+
+# Update PFCP server address (management IP for control plane)
+/address:/ && in_pfcp_server {
+    sub(/address: 127\.0\.0\.3/, "address: " mgmt_ip);
+    in_pfcp_server=0;
+}
+
+# Print the current line (modified or not)
+{ print }
+' $TMP_FILE > ${TMP_FILE}.new
+
+# Apply the changes
+sudo cp ${TMP_FILE}.new /etc/open5gs/sgwu.yaml
+echo -e "${GREEN}SGW-U parameters updated using awk method${NC}"
+
+# Clean up temporary files
+rm -f $TMP_FILE ${TMP_FILE}.new
+
+# Restart Open5GS SMF and SGW-U services
+echo -e "${GREEN}Restarting Open5GS SMF and SGW-U services...${NC}"
+sudo systemctl restart open5gs-smfd
+sudo systemctl restart open5gs-sgwud
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}Open5GS SMF and SGW-U services restarted successfully.${NC}"
+else
+    echo -e "${RED}Failed to restart some services. Please check service status.${NC}"
 fi
 
 # Check and install iptables if needed (especially for Debian)

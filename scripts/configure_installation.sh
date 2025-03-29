@@ -71,7 +71,8 @@ echo -e "\n${YELLOW}Configuring network interfaces...${NC}"
 list_ip_addresses
 
 # Get management IP
-echo -e "\n${YELLOW}Select the IP address for management traffic:${NC}"
+echo -e "\n${YELLOW}Select the IP address for S1/Management traffic:${NC}"
+echo -e "This IP will be used for MME S1AP, SMF GTPC/PFCP, and WebUI interfaces (control plane)"
 while true; do
     read -p "Enter number from list: " mgmt_num
     if [[ $mgmt_num =~ ^[0-9]+$ ]]; then
@@ -87,17 +88,18 @@ while true; do
     fi
 done
 
-# Get S1 IP
-echo -e "\n${YELLOW}Select the IP address for S1/customer traffic:${NC}"
+# Get User WAN IP
+echo -e "\n${YELLOW}Select the IP address for User WAN traffic:${NC}"
+echo -e "This IP will be used for SMF GTPU and SGW-U GTPU interfaces (user data traffic)"
 while true; do
-    read -p "Enter number from list: " s1_num
-    if [[ $s1_num =~ ^[0-9]+$ ]]; then
-        s1_ip=$(get_ip_from_selection "$s1_num")
-        if [ ! -z "$s1_ip" ] && [ "$s1_ip" != "$mgmt_ip" ]; then
-            s1_interface=$(get_interface_from_ip "$s1_ip")
+    read -p "Enter number from list: " user_wan_num
+    if [[ $user_wan_num =~ ^[0-9]+$ ]]; then
+        user_wan_ip=$(get_ip_from_selection "$user_wan_num")
+        if [ ! -z "$user_wan_ip" ]; then
+            user_wan_interface=$(get_interface_from_ip "$user_wan_ip")
             break
         else
-            echo -e "${RED}Invalid selection or same as management IP. Please choose a different number from the list.${NC}"
+            echo -e "${RED}Invalid selection. Please choose a number from the list.${NC}"
         fi
     else
         echo -e "${RED}Please enter a number.${NC}"
@@ -180,8 +182,8 @@ cat > /etc/open5gs/install.conf << EOF
 # Network Configuration
 MGMT_INTERFACE=$mgmt_interface
 MGMT_IP=$mgmt_ip
-S1_INTERFACE=$s1_interface
-S1_IP=$s1_ip
+USER_WAN_INTERFACE=$user_wan_interface
+USER_WAN_IP=$user_wan_ip
 
 # PLMN Configuration
 MCC=$mcc
@@ -200,7 +202,7 @@ chmod 600 /etc/open5gs/install.conf
 echo -e "\n${GREEN}✓ Configuration completed successfully${NC}"
 echo -e "${YELLOW}Configuration Summary:${NC}"
 echo -e "Management Interface: $mgmt_interface ($mgmt_ip)"
-echo -e "S1/Customer Interface: $s1_interface ($s1_ip)"
+echo -e "User WAN Interface: $user_wan_interface ($user_wan_ip)"
 echo -e "PLMN: MCC=$mcc, MNC=$mnc, TAC=$tac"
 echo -e "HSS URL: $hss_url"
 echo -e "${YELLOW}Configuration saved to /etc/open5gs/install.conf${NC}" 

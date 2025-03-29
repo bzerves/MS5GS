@@ -92,6 +92,10 @@ certbot --nginx -d $DOMAIN_NAME --non-interactive --agree-tos --email admin@$DOM
 
 # Update Open5GS web UI configuration
 echo -e "\n${YELLOW}Updating Open5GS web UI configuration...${NC}"
+
+# Strip any CIDR notation from IP addresses if present
+S1_MANAGEMENT_IP_CLEAN=$(echo "$MGMT_IP" | sed -E 's/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+
 cat > /etc/open5gs/webui.yaml << EOF
 server:
   port: 3000
@@ -104,16 +108,16 @@ logger:
 
 open5gs:
   mme:
-    addr: $MGMT_IP
+    addr: $S1_MANAGEMENT_IP_CLEAN
     port: 36412
   sgw:
-    addr: $MGMT_IP
+    addr: $S1_MANAGEMENT_IP_CLEAN
     port: 2123
   pgw:
-    addr: $MGMT_IP
+    addr: $S1_MANAGEMENT_IP_CLEAN
     port: 2123
   hss:
-    addr: $MGMT_IP
+    addr: $S1_MANAGEMENT_IP_CLEAN
     port: 3868
 EOF
 
