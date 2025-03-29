@@ -67,20 +67,27 @@ check_ram() {
 }
 
 # Function to check Ubuntu version
-check_ubuntu_version() {
-    echo -e "\n${YELLOW}Checking Ubuntu version...${NC}"
+check_os_version() {
+    echo -e "\n${YELLOW}Checking operating system...${NC}"
     if [ -f /etc/os-release ]; then
-        local version=$(grep VERSION_ID /etc/os-release | cut -d'"' -f2)
-        if [[ "$version" == "24.04"* ]]; then
+        # Get OS name and version from os-release file
+        source /etc/os-release
+        local os_name="$ID"
+        local version="$VERSION_ID"
+        
+        if [[ "$os_name" == "ubuntu" && "$version" == "24.04"* ]]; then
             echo -e "${GREEN}✓ Compatible Ubuntu version: $version${NC}"
             return 0
+        elif [[ "$os_name" == "debian" && "$version" == "12"* ]]; then
+            echo -e "${GREEN}✓ Compatible Debian version: $version${NC}"
+            return 0
         else
-            echo -e "${RED}✗ Incompatible Ubuntu version: $version${NC}"
-            echo "This script is designed for Ubuntu 24.04"
+            echo -e "${RED}✗ Incompatible OS: $os_name $version${NC}"
+            echo "This script is designed for Ubuntu 24.04 or Debian 12"
             return 1
         fi
     else
-        echo -e "${RED}✗ Could not determine Ubuntu version${NC}"
+        echo -e "${RED}✗ Could not determine operating system version${NC}"
         return 1
     fi
 }
@@ -92,12 +99,12 @@ check_storage
 storage_check=$?
 check_ram
 ram_check=$?
-check_ubuntu_version
-ubuntu_check=$?
+check_os_version
+os_check=$?
 
 # Summary
 echo -e "\n${GREEN}=== System Requirements Summary ===${NC}"
-if [ "$network_check" -eq 0 ] && [ "$storage_check" -eq 0 ] && [ "$ram_check" -eq 0 ] && [ "$ubuntu_check" -eq 0 ]; then
+if [ "$network_check" -eq 0 ] && [ "$storage_check" -eq 0 ] && [ "$ram_check" -eq 0 ] && [ "$os_check" -eq 0 ]; then
     echo -e "${GREEN}✓ All system requirements met!${NC}"
     exit 0
 else
