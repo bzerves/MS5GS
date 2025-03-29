@@ -132,12 +132,6 @@ awk -v mcc="$MCC" -v mnc="$MNC" -v tac="$TAC" -v s1_ip="$S1_IP_CLEAN" -v mgmt_ip
     in_s1ap_server=0;  # Only replace first address in s1ap section
 }
 
-# Update GTPC server address
-/address:/ && in_gtpc_server {
-    sub(/address: 127\.0\.0\.2/, "address: " mgmt_ip);
-    in_gtpc_server=0;  # Only replace first address in gtpc section
-}
-
 # Print the current line (modified or not)
 { print }
 ' $TMP_FILE > ${TMP_FILE}.new
