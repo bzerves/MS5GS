@@ -1,388 +1,183 @@
 #!/bin/bash
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+# Script to Install and Configure Open5GS for a 4G/5G Hybrid Core
+# with a Two-Interface Setup (Management + User Plane WAN)
 
-# Check for root privileges
-if [ "$EUID" -ne 0 ]; then 
-    echo -e "${RED}Please run as root (use sudo)${NC}"
+# --- Configuration (Defaults, can be overridden by install.conf) ---
+DEFAULT_UE_SUBNET="10.45.0.0/16"
+# DEFAULT_DNN is not used for configuration in this smf.yaml format
+INSTALL_CONF="/etc/open5gs/install.conf"
+OPEN5GS_CONFIG_DIR="/etc/open5gs"
+
+# Define standard loopback IPs for internal communication
+SMF_PFCP_IP="127.0.0.4" # SMF listens for PFCP here
+UPF_PFCP_IP="127.0.0.7" # UPF listens for PFCP here
+
+# --- Colors for output ---
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
+
+# --- Helper Functions ---
+log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_step() { echo -e "\n${YELLOW}>>> Step: $1...${NC}"; }
+
+# --- Check Prerequisites ---
+log_step "Checking Prerequisites"
+# ... (Checks remain the same) ...
+if [ "$EUID" -ne 0 ]; then log_error "Please run as root (use sudo)"; exit 1; fi
+if [ ! -f "$INSTALL_CONF" ]; then log_error "Configuration file not found: $INSTALL_CONF."; exit 1; fi
+log_info "Prerequisites met."
+
+# --- Load Configuration ---
+log_step "Loading Configuration from $INSTALL_CONF"
+source "$INSTALL_CONF"
+log_info "Configuration loaded."
+UE_SUBNET="${UE_SUBNET:-$DEFAULT_UE_SUBNET}" # Use value from conf or default
+log_info "Using UE Subnet: $UE_SUBNET"
+
+# --- Validate Core Configuration Variables ---
+log_step "Validating Core Configuration"
+if [ -z "$MGMT_IP" ] || [ -z "$USER_WAN_INTERFACE" ] || \
+   [ -z "$MCC" ] || [ -z "$MNC" ] || [ -z "$TAC" ] || [ -z "$USER_WAN_IP" ] ; then
+    log_error "Required variable missing in $INSTALL_CONF (Need MGMT_IP, USER_WAN_INTERFACE, USER_WAN_IP, MCC, MNC, TAC)"
     exit 1
 fi
+MGMT_IP_ADDR=$(echo "$MGMT_IP" | cut -d'/' -f1); if [ -z "$MGMT_IP_ADDR" ]; then log_error "Invalid MGMT_IP"; exit 1; fi
+USER_WAN_IP_ADDR=$(echo "$USER_WAN_IP" | cut -d'/' -f1); if [ -z "$USER_WAN_IP_ADDR" ]; then log_error "Invalid USER_WAN_IP"; exit 1; fi
+TAC_NUM=$(printf '%d' "$TAC" 2>/dev/null); if [ -z "$TAC_NUM" ]; then log_error "Invalid TAC value '$TAC'"; exit 1; fi
 
-# Check for configuration file
-if [ ! -f /etc/open5gs/install.conf ]; then
-    echo -e "${RED}Configuration file not found. Please run configure_installation.sh first.${NC}"
-    exit 1
-fi
-
-# Load configuration
-source /etc/open5gs/install.conf
-
-# Detect OS and set repository accordingly
-echo -e "\n${YELLOW}Detecting OS and adding Open5GS repository...${NC}"
-if [ -f /etc/os-release ]; then
-    source /etc/os-release
-    if [[ "$ID" == "ubuntu" ]]; then
-        echo -e "${YELLOW}Detected Ubuntu. Adding Open5GS PPA...${NC}"
-        apt-get install -y software-properties-common
-        add-apt-repository -y ppa:open5gs/latest
-    elif [[ "$ID" == "debian" ]]; then
-        echo -e "${YELLOW}Detected Debian. Adding Open5GS repository...${NC}"
-        apt-get install -y wget gnupg
-        mkdir -p /etc/apt/keyrings
-        wget -qO - https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_12/Release.key | gpg --dearmor -o /etc/apt/keyrings/open5gs.gpg
-        echo "deb [signed-by=/etc/apt/keyrings/open5gs.gpg] http://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_12/ ./" > /etc/apt/sources.list.d/open5gs.list
+# --- Interface Name Resolution ---
+EFFECTIVE_USER_WAN_IF="$USER_WAN_INTERFACE"
+if [[ "$USER_WAN_INTERFACE" == "dynamic" ]]; then
+    log_info "Resolving USER_WAN_INTERFACE from USER_WAN_IP ($USER_WAN_IP_ADDR)..."
+    RESOLVED_IF=$(ip -4 -o addr show | awk -v ip="$USER_WAN_IP_ADDR" '$4 ~ ("^" ip "/") {print $2; exit}')
+    if [ -n "$RESOLVED_IF" ]; then
+        if [[ "$RESOLVED_IF" == "lo" ]]; then log_error "Resolved interface for IP $USER_WAN_IP_ADDR is 'lo'. Check IP assignment."; exit 1; fi
+        log_info "Resolved USER_WAN_INTERFACE to: $RESOLVED_IF"
+        EFFECTIVE_USER_WAN_IF="$RESOLVED_IF"
     else
-        echo -e "${RED}Unsupported OS: $ID${NC}"
-        exit 1
+        log_error "Could not resolve interface name for IP $USER_WAN_IP_ADDR using 'ip addr show'."; exit 1;
     fi
-else
-    echo -e "${RED}Could not determine OS type${NC}"
-    exit 1
+else log_info "Using configured USER_WAN_INTERFACE: $USER_WAN_INTERFACE"; fi
+
+log_info "Target Management IP: $MGMT_IP_ADDR"
+log_info "Effective User WAN Interface: $EFFECTIVE_USER_WAN_IF"
+log_info "Target PLMN: $MCC/$MNC, TAC: $TAC_NUM"
+
+
+# --- OS Detection and Repository Setup ---
+log_step "Detecting OS and Setting up Open5GS Repository"
+if [ -f /etc/os-release ]; then source /etc/os-release; if [[ "$ID" == "ubuntu" ]]; then log_info "Detected Ubuntu ($VERSION_ID). Adding Open5GS PPA"; apt-get update -y >/dev/null 2>&1 || log_warn "..."; apt-get install -y software-properties-common || exit 1; add-apt-repository -y ppa:open5gs/latest || exit 1; elif [[ "$ID" == "debian" ]]; then log_info "Detected Debian ($VERSION_ID). Adding Open5GS repository"; apt-get update -y >/dev/null 2>&1 || log_warn "..."; apt-get install -y wget gnupg || exit 1; rm -f /etc/apt/keyrings/open5gs.gpg; mkdir -p /etc/apt/keyrings; wget -qO - https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_12/Release.key | gpg --dearmor -o /etc/apt/keyrings/open5gs.gpg || exit 1; echo "deb [signed-by=/etc/apt/keyrings/open5gs.gpg] http://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_12/ ./" > /etc/apt/sources.list.d/open5gs.list; else log_error "Unsupported OS: $ID"; exit 1; fi; else log_error "Could not determine OS type"; exit 1; fi; log_info "Repository setup complete."
+
+# --- Package Installation ---
+log_step "Updating Package Lists"; apt-get update || { log_error "Failed to update package lists"; exit 1; }; log_info "Package lists updated."
+log_step "Installing Open5GS Packages"; apt-get install -y open5gs || { log_error "Failed to install Open5GS meta-package"; exit 1; }; log_info "Open5GS packages installed."
+log_step "Installing Required Utilities (yq, iptables, persistence tools)"; apt-get install -y yq iptables iptables-persistent || { log_error "Failed to install required utilities"; exit 1; }; if ! command -v yq &> /dev/null; then log_error "yq command still not found."; exit 1; fi; if ! command -v iptables &> /dev/null; then log_error "iptables command still not found."; exit 1; fi; log_info "Required utilities are installed."
+
+# --- Open5GS Configuration ---
+log_step "Applying Open5GS Configuration via yq"
+
+MME_CONF="$OPEN5GS_CONFIG_DIR/mme.yaml"
+SGWU_CONF="$OPEN5GS_CONFIG_DIR/sgwu.yaml"
+SMF_CONF="$OPEN5GS_CONFIG_DIR/smf.yaml"
+UPF_CONF="$OPEN5GS_CONFIG_DIR/upf.yaml"
+
+log_info "Backing up existing configuration files (*.yaml -> *.yaml.bak)"
+for conf_file in "$MME_CONF" "$SGWU_CONF" "$SMF_CONF" "$UPF_CONF"; do if [ -f "$conf_file" ]; then cp "$conf_file" "${conf_file}.bak" || { log_error "Failed to backup $conf_file"; exit 1; }; else log_warn "File $conf_file not found, skipping backup."; fi; done
+log_info "Backups complete."
+
+log_info "Modifying YAML configuration files..."
+
+# Configure MME
+if [ -f "$MME_CONF" ]; then
+    log_info "Configuring MME: PLMN, TAC, S1AP Interface"
+    yq -i -y --arg mcc_val "$MCC" '.mme.plmn_id[0].mcc = $mcc_val' "$MME_CONF" || log_warn "MME MCC update failed"
+    yq -i -y --arg mnc_val "$MNC" '.mme.plmn_id[0].mnc = $mnc_val' "$MME_CONF" || log_warn "MME MNC update failed"
+    yq -i -y --argjson tac_val "$TAC_NUM" '.mme.tai_support[0].tac = $tac_val' "$MME_CONF" || log_warn "MME TAC update failed"
+    yq -i -y --arg mgmt_ip "$MGMT_IP_ADDR" '.mme.s1ap.server[0].address = $mgmt_ip' "$MME_CONF" || log_warn "MME S1AP address update failed"
 fi
-
-echo -e "${YELLOW}Updating package lists...${NC}"
-apt update || {
-    echo -e "${RED}Failed to update package lists${NC}"
-    exit 1
-}
-
-echo -e "${YELLOW}Installing Open5GS...${NC}" 
-apt install -y open5gs || {
-    echo -e "${RED}Failed to install Open5GS${NC}"
-    exit 1
-}
-
-# Configure Open5GS
-echo -e "${GREEN}Configuring Open5GS MME...${NC}"
-
-# Check if the configuration files exist
-if [ ! -f /etc/open5gs/mme.yaml ]; then
-    echo -e "${RED}MME configuration file not found at /etc/open5gs/mme.yaml${NC}"
-    exit 1
-fi
-
-# Backup the original configuration
-echo -e "${YELLOW}Backing up original MME configuration...${NC}"
-sudo cp /etc/open5gs/mme.yaml /etc/open5gs/mme.yaml.bak
-
-# Update mme.yaml with values from install.conf
-echo -e "${YELLOW}Setting MCC: $MCC, MNC: $MNC, TAC: $TAC${NC}"
-echo -e "${YELLOW}Setting Management IP: $MGMT_IP, User WAN IP: $USER_WAN_IP${NC}"
-
-# Strip any CIDR notation from IP addresses if present
-S1_MANAGEMENT_IP_CLEAN=$(echo "$MGMT_IP" | sed -E 's/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+).*/\1/')
-USER_WAN_IP_CLEAN=$(echo "$USER_WAN_IP" | sed -E 's/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+).*/\1/')
-
-# Use awk for all parameter updates
-echo -e "${YELLOW}Using awk for all parameter updates...${NC}"
-
-# Create a temporary file for MME config
-TMP_FILE=$(mktemp)
-cat /etc/open5gs/mme.yaml > $TMP_FILE
-
-# Update all values with a single awk command
-awk -v mcc="$MCC" -v mnc="$MNC" -v tac="$TAC" -v mgmt_ip="$S1_MANAGEMENT_IP_CLEAN" -v user_wan_ip="$USER_WAN_IP_CLEAN" '
-# Track context within the YAML structure
-/mme:/ { in_mme=1 }
-/s1ap:/ && in_mme { in_s1ap=1; in_gummei=0; in_tai=0 }
-/gtpc:/ && in_mme { in_s1ap=0; in_gtpc=1; in_gummei=0; in_tai=0 }
-/gummei:/ && in_mme { in_s1ap=0; in_gtpc=0; in_gummei=1; in_tai=0 }
-/tai:/ && in_mme { in_s1ap=0; in_gtpc=0; in_gummei=0; in_tai=1 }
-/server:/ && in_s1ap { in_s1ap_server=1 }
-/server:/ && in_gtpc { in_gtpc_server=1 }
-/client:/ { in_s1ap_server=0; in_gtpc_server=0 }
-/security:/ { in_gummei=0; in_tai=0 }
-
-# Update MCC in gummei section
-/mcc:/ && in_gummei {
-    sub(/mcc: [0-9]+/, "mcc: " mcc);
-    in_plmn_id_gummei_done=1;
-}
-
-# Update MNC in gummei section
-/mnc:/ && in_gummei && in_plmn_id_gummei_done {
-    sub(/mnc: [0-9]+/, "mnc: " mnc);
-    in_plmn_id_gummei_done=0;
-}
-
-# Update MCC in tai section
-/mcc:/ && in_tai {
-    sub(/mcc: [0-9]+/, "mcc: " mcc);
-    in_plmn_id_tai_done=1;
-}
-
-# Update MNC in tai section
-/mnc:/ && in_tai && in_plmn_id_tai_done {
-    sub(/mnc: [0-9]+/, "mnc: " mnc);
-    in_plmn_id_tai_done=0;
-}
-
-# Update TAC value
-/tac:/ && in_tai {
-    sub(/tac: [0-9]+/, "tac: " tac);
-}
-
-# Update S1AP server address (using management IP)
-/address:/ && in_s1ap_server {
-    sub(/address: 127\.0\.0\.2/, "address: " mgmt_ip);
-    in_s1ap_server=0;  # Only replace first address in s1ap section
-}
-
-# Print the current line (modified or not)
-{ print }
-' $TMP_FILE > ${TMP_FILE}.new
-
-# Apply the changes
-sudo cp ${TMP_FILE}.new /etc/open5gs/mme.yaml
-echo -e "${GREEN}All parameters updated using awk method${NC}"
-
-# Clean up temporary files
-rm -f $TMP_FILE ${TMP_FILE}.new
-
-# Verify the changes
-if grep -q "mcc: $MCC" /etc/open5gs/mme.yaml && \
-   grep -q "mnc: $MNC" /etc/open5gs/mme.yaml && \
-   grep -q "tac: $TAC" /etc/open5gs/mme.yaml && \
-   grep -q "address: $S1_MANAGEMENT_IP_CLEAN" /etc/open5gs/mme.yaml; then
-    echo -e "${GREEN}MME configuration updated successfully.${NC}"
-else
-    echo -e "${RED}Failed to update some MME configuration values. Please check /etc/open5gs/mme.yaml manually.${NC}"
-    echo -e "${YELLOW}A backup of the original configuration is available at /etc/open5gs/mme.yaml.bak${NC}"
-    # Debug output to show what was updated
-    echo -e "${YELLOW}Current MME configuration values:${NC}"
-    echo -e "MCC: $(grep -o 'mcc: [0-9]\+' /etc/open5gs/mme.yaml | head -1)"
-    echo -e "MNC: $(grep -o 'mnc: [0-9]\+' /etc/open5gs/mme.yaml | head -1)"
-    echo -e "TAC: $(grep -o 'tac: [0-9]\+' /etc/open5gs/mme.yaml | head -1)"
-    echo -e "S1AP Address: $(grep -A 2 's1ap:' /etc/open5gs/mme.yaml | grep 'address:')"
-    echo -e "GTPC Address: $(grep -A 2 'gtpc:' /etc/open5gs/mme.yaml | grep 'address:')"
-fi
-
-# Check and remove NO_TLS option from freeDiameter config files
-echo -e "${YELLOW}Checking and removing NO_TLS option from freeDiameter config files...${NC}"
-
-# Check for MME freeDiameter config
-if [ -f /etc/freeDiameter/mme.conf ]; then
-    echo -e "${YELLOW}Checking /etc/freeDiameter/mme.conf for NO_TLS option...${NC}"
-    
-    # Backup the file before making changes
-    cp /etc/freeDiameter/mme.conf /etc/freeDiameter/mme.conf.bak
-    
-    # Remove NO_TLS option from ConnectPeer sections
-    sed -i 's/ConnectPeer.*NO_TLS/ConnectPeer/g' /etc/freeDiameter/mme.conf
-    
-    # Check if changes were made
-    if cmp -s /etc/freeDiameter/mme.conf /etc/freeDiameter/mme.conf.bak; then
-        echo -e "${GREEN}No NO_TLS option found in mme.conf.${NC}"
-    else
-        echo -e "${GREEN}Successfully removed NO_TLS option from mme.conf.${NC}"
-    fi
-else
-    echo -e "${YELLOW}/etc/freeDiameter/mme.conf file not found.${NC}"
-fi
-
-# Check for HSS freeDiameter config
-if [ -f /etc/freeDiameter/hss.conf ]; then
-    echo -e "${YELLOW}Checking /etc/freeDiameter/hss.conf for NO_TLS option...${NC}"
-    
-    # Backup the file before making changes
-    cp /etc/freeDiameter/hss.conf /etc/freeDiameter/hss.conf.bak
-    
-    # Remove NO_TLS option from ConnectPeer sections
-    sed -i 's/ConnectPeer.*NO_TLS/ConnectPeer/g' /etc/freeDiameter/hss.conf
-    
-    # Check if changes were made
-    if cmp -s /etc/freeDiameter/hss.conf /etc/freeDiameter/hss.conf.bak; then
-        echo -e "${GREEN}No NO_TLS option found in hss.conf.${NC}"
-    else
-        echo -e "${GREEN}Successfully removed NO_TLS option from hss.conf.${NC}"
-    fi
-else
-    echo -e "${YELLOW}/etc/freeDiameter/hss.conf file not found.${NC}"
-fi
-
-
-
-
-
-# Configure SMF
-echo -e "${GREEN}Configuring Open5GS SMF...${NC}"
-
-if [ ! -f /etc/open5gs/smf.yaml ]; then
-    echo -e "${RED}SMF configuration file not found at /etc/open5gs/smf.yaml${NC}"
-    exit 1
-fi
-
-echo -e "${YELLOW}Backing up original SMF configuration...${NC}"
-sudo cp /etc/open5gs/smf.yaml /etc/open5gs/smf.yaml.bak
-
-TMP_FILE=$(mktemp)
-cat /etc/open5gs/smf.yaml > $TMP_FILE
-
-awk -v mgmt_ip="$S1_MANAGEMENT_IP_CLEAN" '
-/smf:/ { in_smf=1 }
-/gtpc:/ && in_smf { in_gtpc=1; in_gtpu=0; in_pfcp=0 }
-/gtpu:/ && in_smf { in_gtpc=0; in_gtpu=1; in_pfcp=0 }
-/pfcp:/ && in_smf { in_gtpc=0; in_gtpu=0; in_pfcp=1 }
-/server:/ && in_gtpc { in_gtpc_server=1 }
-/server:/ && in_gtpu { in_gtpu_server=1 }
-/server:/ && in_pfcp { in_pfcp_server=1 }
-/client:/ { in_gtpc_server=0; in_gtpu_server=0; in_pfcp_server=0 }
-
-/address:/ && in_gtpc_server {
-    sub(/address:.*/, "address: " mgmt_ip);
-    in_gtpc_server=0;
-}
-
-/address:/ && in_gtpu_server {
-    sub(/address:.*/, "address: 127.0.0.10");
-    in_gtpu_server=0;
-}
-
-/address:/ && in_pfcp_server {
-    sub(/address:.*/, "address: " mgmt_ip);
-    in_pfcp_server=0;
-}
-
-{ print }
-' $TMP_FILE > ${TMP_FILE}.new
-
-sudo cp ${TMP_FILE}.new /etc/open5gs/smf.yaml
-echo -e "${GREEN}SMF parameters updated using awk method${NC}"
-rm -f $TMP_FILE ${TMP_FILE}.new
 
 # Configure SGW-U
-echo -e "${GREEN}Configuring Open5GS SGW-U...${NC}"
-
-if [ ! -f /etc/open5gs/sgwu.yaml ]; then
-    echo -e "${RED}SGW-U configuration file not found at /etc/open5gs/sgwu.yaml${NC}"
-    exit 1
-fi
-
-echo -e "${YELLOW}Backing up original SGW-U configuration...${NC}"
-sudo cp /etc/open5gs/sgwu.yaml /etc/open5gs/sgwu.yaml.bak
-
-TMP_FILE=$(mktemp)
-cat /etc/open5gs/sgwu.yaml > $TMP_FILE
-
-awk -v mgmt_ip="$S1_MANAGEMENT_IP_CLEAN" -v user_wan_ip="$USER_WAN_IP_CLEAN" '
-/sgwu:/ { in_sgwu=1 }
-/gtpu:/ && in_sgwu { in_gtpu=1; in_pfcp=0 }
-/pfcp:/ && in_sgwu { in_gtpu=0; in_pfcp=1 }
-/server:/ && in_gtpu { in_gtpu_server=1 }
-/server:/ && in_pfcp { in_pfcp_server=1 }
-/client:/ { in_gtpu_server=0; in_pfcp_server=0; in_pfcp_client=1 }
-
-/address:/ && in_gtpu_server {
-    sub(/address:.*/, "address: " user_wan_ip);
-    in_gtpu_server=0;
-}
-
-/address:/ && in_pfcp_server {
-    sub(/address:.*/, "address: 127.0.0.6");
-    in_pfcp_server=0;
-}
-
-/^#.*sgwc:/ && in_pfcp && in_pfcp_client {
-    sub(/^#/, "");
-}
-
-/^#.*address:.*127\./ && in_pfcp && in_pfcp_client {
-    sub(/^#/, "");
-    sub(/address:.*/, "address: " mgmt_ip);
-}
-
-{ print }
-' $TMP_FILE > ${TMP_FILE}.new
-
-sudo cp ${TMP_FILE}.new /etc/open5gs/sgwu.yaml
-echo -e "${GREEN}SGW-U parameters updated using awk method${NC}"
-rm -f $TMP_FILE ${TMP_FILE}.new
-
-
-
-
-
-
-
-# Check and install iptables if needed (especially for Debian)
-echo -e "${YELLOW}Checking if iptables is installed...${NC}"
-if ! command -v iptables &> /dev/null; then
-    echo -e "${YELLOW}iptables not found. Installing iptables and related packages...${NC}"
-    # Set non-interactive frontend to avoid prompts
-    export DEBIAN_FRONTEND=noninteractive
-    # Pre-set answers for iptables-persistent
-    echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
-    echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
-    # Install packages
-    apt install -y iptables iptables-persistent netfilter-persistent || {
-        echo -e "${RED}Failed to install iptables${NC}"
-        exit 1
-    }
-    # Create rules directories if they don't exist
-    mkdir -p /etc/iptables
-fi
-
-# Configure IP forwarding and firewall rules
-echo -e "${GREEN}Configuring IP forwarding and firewall rules...${NC}"
-
-# Enable IPv4/IPv6 forwarding
-echo -e "${YELLOW}Enabling IPv4/IPv6 forwarding...${NC}"
-sysctl -w net.ipv4.ip_forward=1
-sysctl -w net.ipv6.conf.all.forwarding=1
-
-# Make IP forwarding persistent
-echo "net.ipv4.ip_forward=1" | tee /etc/sysctl.d/30-ipforward.conf
-echo "net.ipv6.conf.all.forwarding=1" | tee -a /etc/sysctl.d/30-ipforward.conf
-
-# Add NAT rules
-echo -e "${YELLOW}Adding NAT rules...${NC}"
-iptables -t nat -A POSTROUTING -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE
-ip6tables -t nat -A POSTROUTING -s 2001:db8:cafe::/48 ! -o ogstun -j MASQUERADE
-
-# Configure firewall
-echo -e "${YELLOW}Configuring firewall...${NC}"
-if command -v ufw >/dev/null 2>&1; then
-    echo -e "${YELLOW}Disabling UFW firewall...${NC}"
-    ufw disable
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ UFW firewall disabled successfully${NC}"
-    else
-        echo -e "${RED}Failed to disable UFW firewall${NC}"
+if [ -f "$SGWU_CONF" ]; then
+    log_info "Configuring SGW-U: GTP-U Interface"
+    if ! yq -i -y --arg mgmt_ip "$MGMT_IP_ADDR" '.sgwu.gtpu.server[0].address = $mgmt_ip' "$SGWU_CONF"; then
+        yq -i -y --arg mgmt_ip "$MGMT_IP_ADDR" '.gtpu.server[0].address = $mgmt_ip' "$SGWU_CONF" || log_warn "SGW-U GTP-U address update failed (both paths)"
     fi
 fi
 
-# Add security rules
-echo -e "${YELLOW}Adding security rules...${NC}"
-iptables -I INPUT -i ogstun -j ACCEPT
-iptables -I INPUT -s 10.45.0.0/16 -j DROP
-ip6tables -I INPUT -s 2001:db8:cafe::/48 -j DROP
+# Configure SMF
+if [ -f "$SMF_CONF" ]; then
+    log_info "Configuring SMF: GTP-C Interface, UE Subnet (Session), PFCP"
 
-# Make iptables rules persistent
-echo -e "${YELLOW}Making iptables rules persistent...${NC}"
-if command -v netfilter-persistent &> /dev/null; then
-    echo -e "${YELLOW}Using netfilter-persistent to save rules...${NC}"
-    netfilter-persistent save || {
-        echo -e "${RED}Failed to save firewall rules using netfilter-persistent${NC}"
-    }
-elif command -v iptables-save &> /dev/null; then
-    iptables-save > /etc/iptables/rules.v4
-    ip6tables-save > /etc/iptables/rules.v6
-    echo -e "${GREEN}✓ Firewall rules saved successfully${NC}"
-else
-    echo -e "${RED}Neither netfilter-persistent nor iptables-save found. Firewall rules will not persist after reboot${NC}"
+    yq -i -y --arg mgmt_ip "$MGMT_IP_ADDR" '.smf.gtpc.server[0].address = $mgmt_ip' "$SMF_CONF" || log_warn "SMF GTP-C address update failed (path: .smf.gtpc...)"
+
+    # --- *** UPDATED: Target .smf.session[0].subnet instead of dnn_list *** ---
+    log_info "Setting SMF Session Subnet to $UE_SUBNET"
+    yq -i -y --arg ue_sub "$UE_SUBNET" '.smf.session[0].subnet = $ue_sub' "$SMF_CONF" || \
+        log_warn "SMF Session Subnet update failed. Check '.smf.session[0].subnet' path in $SMF_CONF."
+
+    # Internal PFCP Config
+    log_info "Setting SMF PFCP server address to $SMF_PFCP_IP"
+    yq -i -y --arg ip "$SMF_PFCP_IP" '.smf.pfcp.server[0].address = $ip' "$SMF_CONF" || \
+       yq -i -y --arg ip "$SMF_PFCP_IP" '.pfcp.server[0].address = $ip' "$SMF_CONF" || log_warn "SMF PFCP server address update failed"
+
+     log_info "Setting SMF UPF Node address to $UPF_PFCP_IP"
+     yq -i -y --arg ip "$UPF_PFCP_IP" '.smf.upf.node[0].address = $ip' "$SMF_CONF" || log_warn "SMF UPF node address update failed (assuming node[0])"
 fi
 
-# Restart all Open5GS services
-echo -e "${GREEN}Restarting all Open5GS services...${NC}"
-for service in open5gs-mmed open5gs-sgwcd open5gs-smfd open5gs-amfd open5gs-sgwud open5gs-upfd open5gs-hssd open5gs-pcrfd open5gs-nrfd open5gs-ausfd open5gs-udmd open5gs-pcfd open5gs-nssfd open5gs-bsfd open5gs-udrd; do
-    if systemctl is-enabled --quiet $service 2>/dev/null; then
-        echo -e "${YELLOW}Restarting $service...${NC}"
-        systemctl restart $service
+# Configure UPF
+if [ -f "$UPF_CONF" ]; then
+    log_info "Configuring UPF: GTP-U Interface, N6 Device, UE Subnet, PFCP"
+    if ! yq -i -y --arg mgmt_ip "$MGMT_IP_ADDR" '.upf.gtpu.server[0].address = $mgmt_ip' "$UPF_CONF"; then
+         yq -i -y --arg mgmt_ip "$MGMT_IP_ADDR" '.gtpu.server[0].address = $mgmt_ip' "$UPF_CONF" || log_warn "UPF GTP-U address update failed"
     fi
-done
+    if ! yq -i -y --arg wan_if "$EFFECTIVE_USER_WAN_IF" '.upf.pdn[0].dev = $wan_if' "$UPF_CONF"; then
+         yq -i -y --arg wan_if "$EFFECTIVE_USER_WAN_IF" '.pdn[0].dev = $wan_if' "$UPF_CONF" || log_warn "UPF N6 device update failed"
+    fi
+    # *** UPDATED: Target .upf.session[0].subnet similar to SMF? Check UPF structure ***
+    if ! yq -i -y --arg ue_sub "$UE_SUBNET" '.upf.ue_subnet = $ue_sub' "$UPF_CONF"; then
+        yq -i -y --arg ue_sub "$UE_SUBNET" '.ue_subnet = $ue_sub' "$UPF_CONF" || log_warn "UPF UE subnet update failed (tried .upf.ue_subnet and .ue_subnet)"
+    fi
 
-echo -e "${GREEN}Open5GS installation and configuration completed successfully.${NC}"
+    log_info "Setting UPF PFCP server address to $UPF_PFCP_IP"
+    yq -i -y --arg ip "$UPF_PFCP_IP" '.upf.pfcp.server[0].address = $ip' "$UPF_CONF" || \
+       yq -i -y --arg ip "$UPF_PFCP_IP" '.pfcp.server[0].address = $ip' "$UPF_CONF" || log_warn "UPF PFCP server address update failed"
+fi
+
+log_info "YAML configuration modifications attempted."
+
+# --- Configure Networking ---
+log_step "Configuring System Networking"; log_info "Enabling IPv4 Forwarding"
+if sysctl net.ipv4.ip_forward | grep -q "net.ipv4.ip_forward = 1"; then log_info "IP forwarding is already enabled."; else log_info "Enabling IP forwarding now..."; sysctl -w net.ipv4.ip_forward=1 || log_warn "..."; if grep -qE "^#?net.ipv4.ip_forward\s*=" /etc/sysctl.conf; then sed -i -E 's/^#?net.ipv4.ip_forward\s*=\s*[01]/net.ipv4.ip_forward=1/' /etc/sysctl.conf; else echo -e "\nnet.ipv4.ip_forward=1" >> /etc/sysctl.conf; fi; log_info "IP forwarding persistent."; sysctl -p > /dev/null; fi
+log_info "Setting up NAT Rule for UE Subnet $UE_SUBNET via $EFFECTIVE_USER_WAN_IF"
+if ! iptables -t nat -C POSTROUTING -s "$UE_SUBNET" -o "$EFFECTIVE_USER_WAN_IF" -j MASQUERADE &> /dev/null; then log_info "Adding iptables MASQUERADE rule..."; iptables -t nat -A POSTROUTING -s "$UE_SUBNET" -o "$EFFECTIVE_USER_WAN_IF" -j MASQUERADE || { log_error "..."; exit 1; }; log_info "Attempting to persist iptables rules..."; if command -v netfilter-persistent > /dev/null; then if systemctl is-active --quiet netfilter-persistent; then netfilter-persistent save || log_warn "..."; log_info "Used netfilter-persistent save."; else log_warn "netfilter-persistent inactive..."; iptables-save > /etc/iptables/rules.v4 || log_warn "..."; ip6tables-save > /etc/iptables/rules.v6 || log_warn "..."; systemctl enable netfilter-persistent &>/dev/null; systemctl start netfilter-persistent &>/dev/null; fi; else log_warn "netfilter-persistent not found."; fi; else log_info "iptables MASQUERADE rule already exists."; fi
+log_info "Networking configuration complete."
+
+# --- Check Dependencies ---
+log_step "Checking Dependencies"; MONGO_SERVICE_NAME=""; if systemctl list-units --full -all | grep -q "mongod.service"; then MONGO_SERVICE_NAME="mongod"; fi; if systemctl list-units --full -all | grep -q "mongodb.service"; then MONGO_SERVICE_NAME="mongodb"; fi
+if [ -n "$MONGO_SERVICE_NAME" ]; then if ! systemctl is-active --quiet "$MONGO_SERVICE_NAME"; then log_error "MongoDB service ($MONGO_SERVICE_NAME) is installed but not running."; log_error "... Please start MongoDB manually ..."; exit 1; else log_info "MongoDB service ($MONGO_SERVICE_NAME) is running."; fi; else log_warn "MongoDB service not found."; fi
+
+# --- Restart Open5GS Services ---
+log_step "Restarting Open5GS Services"; CORE_SERVICES=( open5gs-nrfd open5gs-ausfd open5gs-udmd open5gs-udrd open5gs-hssd open5gs-pcrfd open5gs-mmed open5gs-sgwcd open5gs-amfd open5gs-smfd open5gs-sgwud open5gs-upfd ); RESTART_FAILED=0; FAILED_SERVICES=(); for service in "${CORE_SERVICES[@]}"; do if systemctl list-units --full -all | grep -q "$service.service"; then log_info "Restarting $service..."; systemctl restart "$service" || { log_warn "..."; RESTART_FAILED=1; FAILED_SERVICES+=($service); }; sleep 0.5; else log_info "Service $service not found..."; fi; done; log_info "Core service restart attempted."; if [ $RESTART_FAILED -ne 0 ]; then log_warn "One or more services failed to restart."; fi
+
+# --- Completion ---
+log_step "Configuration Complete"
+echo -e "${GREEN}==============================================================="
+echo -e " Open5GS Installation and Configuration Summary"
+echo -e "===============================================================${NC}"
+echo -e "* Installation & Configuration Attempt Summary:"
+echo -e "  - YAML Configs (PLMN/TAC/Network/PFCP/Session): Applied (Check warnings)"
+echo -e ""
+echo -e "${YELLOW}IMPORTANT NEXT STEPS & WARNINGS:${NC}"
+echo -e "* Verify configuration file changes (originals *.bak)."
+echo -e "* ${YELLOW}Note:${NC} UE Subnet configuration was applied to '.smf.session[0].subnet'."
+echo -e "* Check Open5GS service status: ${GREEN}sudo systemctl status 'open5gs-*'${NC}"
+if [ ${#FAILED_SERVICES[@]} -ne 0 ]; then echo -e "* ${RED}Check failed services:${NC} ${FAILED_SERVICES[*]} using ${GREEN}sudo journalctl -xeu <service_name>${NC}"; fi
+echo -e "* Monitor logs: ${GREEN}tail -f /var/log/open5gs/*.log${NC}"
+echo -e "* Check eNodeB/gNodeB config."
+echo -e "* Test UE connectivity."
+echo -e "${GREEN}===============================================================${NC}"
+
+log_info "Script finished."
+exit 0

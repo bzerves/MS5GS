@@ -12,91 +12,72 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Function to stop service
-stop_service() {
-    local service=$1
-    echo -e "${YELLOW}Stopping $service...${NC}"
-    systemctl stop $service
-    sleep 2
-    if systemctl is-active --quiet $service; then
-        echo -e "${RED}Failed to stop $service${NC}"
-        return 1
-    else
-        echo -e "${GREEN}✓ $service stopped successfully${NC}"
-        return 0
-    fi
-}
+echo -e "${YELLOW}Restarting Open5GS services...${NC}"
 
-# Function to start service
-start_service() {
-    local service=$1
-    echo -e "${YELLOW}Starting $service...${NC}"
-    systemctl start $service
-    sleep 2
-    if systemctl is-active --quiet $service; then
-        echo -e "${GREEN}✓ $service started successfully${NC}"
-        return 0
-    else
-        echo -e "${RED}Failed to start $service${NC}"
-        return 1
-    fi
-}
+# Detect OS type
+if [ -f /etc/os-release ]; then
+    source /etc/os-release
+fi
 
-# List of services to restart
-services=(
-    "open5gs-hssd"
+# List of all Open5GS services to restart
+OPEN5GS_SERVICES=(
     "open5gs-mmed"
     "open5gs-sgwcd"
-    "open5gs-sgwud"
-    "open5gs-pgwd"
     "open5gs-smfd"
     "open5gs-amfd"
+    "open5gs-sgwud"
+    "open5gs-upfd"
+    "open5gs-hssd"
     "open5gs-pcrfd"
-    "open5gs-nssfd"
-    "open5gs-bsfd"
+    "open5gs-nrfd"
     "open5gs-ausfd"
     "open5gs-udmd"
     "open5gs-pcfd"
+    "open5gs-nssfd"
+    "open5gs-bsfd"
     "open5gs-udrd"
+    "open5gs-scpd"
 )
 
-# Stop all services
-echo -e "\n${YELLOW}Stopping all Open5GS services...${NC}"
-for service in "${services[@]}"; do
-    stop_service "$service"
-done
-
-# Wait for all services to stop
-echo -e "\n${YELLOW}Waiting for services to fully stop...${NC}"
-sleep 5
-
-# Start all services
-echo -e "\n${YELLOW}Starting all Open5GS services...${NC}"
-for service in "${services[@]}"; do
-    start_service "$service"
-done
-
-# Verify all services are running
-echo -e "\n${YELLOW}Verifying service status...${NC}"
-all_running=true
-for service in "${services[@]}"; do
-    if systemctl is-active --quiet $service; then
-        echo -e "${GREEN}✓ $service is running${NC}"
-    else
-        echo -e "${RED}✗ $service is not running${NC}"
-        all_running=false
-    fi
-done
-
-if [ "$all_running" = true ]; then
-    echo -e "\n${GREEN}✓ All services have been successfully restarted${NC}"
-else
-    echo -e "\n${RED}✗ Some services failed to start. Please check the logs for more information.${NC}"
-    echo -e "${YELLOW}Checking logs for failed services...${NC}"
-    for service in "${services[@]}"; do
-        if ! systemctl is-active --quiet $service; then
-            echo -e "\n${YELLOW}Logs for $service:${NC}"
-            journalctl -u $service -n 10 --no-pager
+# Restart function for systemd (Linux)
+restart_systemd() {
+    for service in "${OPEN5GS_SERVICES[@]}"; do
+        echo -e "Restarting ${service}..."
+        systemctl restart $service
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}${service} restarted successfully${NC}"
+        else
+            echo -e "${YELLOW}${service} not available or failed to restart${NC}"
         fi
     done
-fi 
+}
+
+# Restart function for launchd (macOS)
+restart_launchd() {
+    for service in "${OPEN5GS_SERVICES[@]}"; do
+        # Convert systemd service name to probable launchd service name
+        launchd_service=$(echo $service | sed 's/open5gs-/com.open5gs./')
+        echo -e "Restarting ${launchd_service}..."
+        launchctl stop $launchd_service
+        launchctl start $launchd_service
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}${launchd_service} restarted successfully${NC}"
+        else
+            echo -e "${YELLOW}${launchd_service} not available or failed to restart${NC}"
+        fi
+    done
+}
+
+# Determine the init system and restart services accordingly
+if command -v systemctl >/dev/null 2>&1; then
+    echo -e "${YELLOW}Using systemd to restart services...${NC}"
+    restart_systemd
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    echo -e "${YELLOW}Detected macOS, using launchctl to restart services...${NC}"
+    restart_launchd
+else
+    echo -e "${RED}Unsupported init system. Please restart Open5GS services manually.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}All Open5GS services reboot process completed!${NC}"
