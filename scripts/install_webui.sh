@@ -24,4 +24,44 @@ if [ ! -f "/etc/open5gs/install.conf" ]; then
     exit 1
 fi
 
+# Install Open5GS WebUI with default settings
+echo -e "${GREEN}Installing Open5GS WebUI...${NC}"
 curl -fsSL https://open5gs.org/open5gs/assets/webui/install | sudo -E bash -
+echo -e "${GREEN}Open5GS WebUI installed successfully!${NC}"
+
+# Install Nginx for reverse proxy
+echo -e "${GREEN}Installing and configuring Nginx as reverse proxy...${NC}"
+apt update && apt install -y nginx
+
+# Extract the management IP from the configuration file and remove CIDR notation
+MGMT_IP_WITH_CIDR=$(grep '^MGMT_IP=' /etc/open5gs/install.conf | cut -d '=' -f2)
+MGMT_IP=$(echo $MGMT_IP_WITH_CIDR | cut -d '/' -f1)
+echo -e "${GREEN}Using management IP: ${MGMT_IP}${NC}"
+
+# Configure Nginx for the web UI with the management IP
+cat <<EOL > /etc/nginx/sites-available/webui
+server {
+    listen 80;
+    server_name $MGMT_IP;
+
+    location / {
+        proxy_pass http://[::1]:9999;  # WebUI runs on IPv6 localhost port 9999
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOL
+
+# Remove default configuration if it exists
+if [ -f /etc/nginx/sites-enabled/default ]; then
+    rm /etc/nginx/sites-enabled/default
+fi
+
+# Enable the Nginx configuration
+ln -sf /etc/nginx/sites-available/webui /etc/nginx/sites-enabled/
+nginx -t  # Test the configuration
+systemctl restart nginx
+
+echo -e "${GREEN}Open5GS WebUI is now accessible at http://${MGMT_IP}${NC}"
