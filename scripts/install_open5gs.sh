@@ -204,26 +204,25 @@ else
     echo -e "${YELLOW}/etc/freeDiameter/hss.conf file not found.${NC}"
 fi
 
+
+
+
+
 # Configure SMF
 echo -e "${GREEN}Configuring Open5GS SMF...${NC}"
 
-# Check if the configuration files exist
 if [ ! -f /etc/open5gs/smf.yaml ]; then
     echo -e "${RED}SMF configuration file not found at /etc/open5gs/smf.yaml${NC}"
     exit 1
 fi
 
-# Backup the original configuration
 echo -e "${YELLOW}Backing up original SMF configuration...${NC}"
 sudo cp /etc/open5gs/smf.yaml /etc/open5gs/smf.yaml.bak
 
-# Create a temporary file for SMF config
 TMP_FILE=$(mktemp)
 cat /etc/open5gs/smf.yaml > $TMP_FILE
 
-# Update SMF values with a single awk command
-awk -v mgmt_ip="$S1_MANAGEMENT_IP_CLEAN" -v user_wan_ip="$USER_WAN_IP_CLEAN" '
-# Track context within the YAML structure
+awk -v mgmt_ip="$S1_MANAGEMENT_IP_CLEAN" '
 /smf:/ { in_smf=1 }
 /gtpc:/ && in_smf { in_gtpc=1; in_gtpu=0; in_pfcp=0 }
 /gtpu:/ && in_smf { in_gtpc=0; in_gtpu=1; in_pfcp=0 }
@@ -233,84 +232,81 @@ awk -v mgmt_ip="$S1_MANAGEMENT_IP_CLEAN" -v user_wan_ip="$USER_WAN_IP_CLEAN" '
 /server:/ && in_pfcp { in_pfcp_server=1 }
 /client:/ { in_gtpc_server=0; in_gtpu_server=0; in_pfcp_server=0 }
 
-# Update GTPC server address (management IP for control plane)
 /address:/ && in_gtpc_server {
-    sub(/address: 127\.0\.0\.4/, "address: " mgmt_ip);
+    sub(/address:.*/, "address: " mgmt_ip);
     in_gtpc_server=0;
 }
 
-# Update GTPU server address (user WAN IP for user traffic)
 /address:/ && in_gtpu_server {
-    sub(/address: 127\.0\.0\.4/, "address: " user_wan_ip);
+    sub(/address:.*/, "address: 127.0.0.10");
     in_gtpu_server=0;
 }
 
-# Update PFCP server address (management IP for control plane)
 /address:/ && in_pfcp_server {
-    sub(/address: 127\.0\.0\.4/, "address: " mgmt_ip);
+    sub(/address:.*/, "address: " mgmt_ip);
     in_pfcp_server=0;
 }
 
-# Print the current line (modified or not)
 { print }
 ' $TMP_FILE > ${TMP_FILE}.new
 
-# Apply the changes
 sudo cp ${TMP_FILE}.new /etc/open5gs/smf.yaml
 echo -e "${GREEN}SMF parameters updated using awk method${NC}"
-
-# Clean up temporary files
 rm -f $TMP_FILE ${TMP_FILE}.new
 
 # Configure SGW-U
 echo -e "${GREEN}Configuring Open5GS SGW-U...${NC}"
 
-# Check if the configuration files exist
 if [ ! -f /etc/open5gs/sgwu.yaml ]; then
     echo -e "${RED}SGW-U configuration file not found at /etc/open5gs/sgwu.yaml${NC}"
     exit 1
 fi
 
-# Backup the original configuration
 echo -e "${YELLOW}Backing up original SGW-U configuration...${NC}"
 sudo cp /etc/open5gs/sgwu.yaml /etc/open5gs/sgwu.yaml.bak
 
-# Create a temporary file for SGW-U config
 TMP_FILE=$(mktemp)
 cat /etc/open5gs/sgwu.yaml > $TMP_FILE
 
-# Update SGW-U values with a single awk command
 awk -v mgmt_ip="$S1_MANAGEMENT_IP_CLEAN" -v user_wan_ip="$USER_WAN_IP_CLEAN" '
-# Track context within the YAML structure
 /sgwu:/ { in_sgwu=1 }
 /gtpu:/ && in_sgwu { in_gtpu=1; in_pfcp=0 }
 /pfcp:/ && in_sgwu { in_gtpu=0; in_pfcp=1 }
 /server:/ && in_gtpu { in_gtpu_server=1 }
 /server:/ && in_pfcp { in_pfcp_server=1 }
-/client:/ { in_gtpu_server=0; in_pfcp_server=0 }
+/client:/ { in_gtpu_server=0; in_pfcp_server=0; in_pfcp_client=1 }
 
-# Update GTPU server address (user WAN IP for user traffic)
 /address:/ && in_gtpu_server {
-    sub(/address: 127\.0\.0\.3/, "address: " user_wan_ip);
+    sub(/address:.*/, "address: " user_wan_ip);
     in_gtpu_server=0;
 }
 
-# Update PFCP server address (management IP for control plane)
 /address:/ && in_pfcp_server {
-    sub(/address: 127\.0\.0\.3/, "address: " mgmt_ip);
+    sub(/address:.*/, "address: 127.0.0.6");
     in_pfcp_server=0;
 }
 
-# Print the current line (modified or not)
+/^#.*sgwc:/ && in_pfcp && in_pfcp_client {
+    sub(/^#/, "");
+}
+
+/^#.*address:.*127\./ && in_pfcp && in_pfcp_client {
+    sub(/^#/, "");
+    sub(/address:.*/, "address: " mgmt_ip);
+}
+
 { print }
 ' $TMP_FILE > ${TMP_FILE}.new
 
-# Apply the changes
 sudo cp ${TMP_FILE}.new /etc/open5gs/sgwu.yaml
 echo -e "${GREEN}SGW-U parameters updated using awk method${NC}"
-
-# Clean up temporary files
 rm -f $TMP_FILE ${TMP_FILE}.new
+
+
+
+
+
+
 
 # Check and install iptables if needed (especially for Debian)
 echo -e "${YELLOW}Checking if iptables is installed...${NC}"
