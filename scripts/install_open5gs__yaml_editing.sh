@@ -1,7 +1,7 @@
 
 
 
-log_step "⚙️  Updating YAML files with the following info:"
+log_step " ⚙️ Updating YAML files with the following info:"
 echo ""
 
 log_info "----------------------------------------"
@@ -41,8 +41,7 @@ yq -y '
 
 log_info "✏️  Editing sgwu.yaml ..."
 yq -y '
-  .sgwu.gtpu.server[0].address = env.MGMT_IP_ADDR |
-  .sgwu.pfcp.server[0].node_id = "127.0.0.6"
+  .sgwu.gtpu.server[0].address = env.MGMT_IP_ADDR
 ' /etc/open5gs/sgwu.yaml > /etc/open5gs/sgwu.yaml.new && mv /etc/open5gs/sgwu.yaml.new /etc/open5gs/sgwu.yaml
 
 log_info "✏️  Editing mme.yaml ..."
@@ -65,7 +64,8 @@ yq -y '
 log_info "✏️  Editing nrf.yaml ..."
 yq -y '
   .nrf.serving[0].plmn_id.mcc = (env.MCC | tonumber) |
-  .nrf.serving[0].plmn_id.mnc = (env.MNC | tonumber)
+  .nrf.serving[0].plmn_id.mnc = (env.MNC | tonumber) |
+  .nrf.sbi.server[0].address = "127.0.0.200"
 ' /etc/open5gs/nrf.yaml > /etc/open5gs/nrf.yaml.new && mv /etc/open5gs/nrf.yaml.new /etc/open5gs/nrf.yaml
 
 log_info "✏️  Editing smf.yaml ..."
@@ -77,7 +77,7 @@ yq -y '
   .smf.metrics.server[0].address = "127.0.0.4" |
   .smf.sbi.server[0].address = "127.0.0.4" |
   .smf.sbi.server[0].port = 7777 |
-  .smf.sbi.client = {"nrf": [{"uri": "http://127.0.0.10:7777"}]}
+  .smf.sbi.client = {"nrf": [{"uri": "http://127.0.0.200:7777"}]}
 ' /etc/open5gs/smf.yaml > /etc/open5gs/smf.yaml.new && mv /etc/open5gs/smf.yaml.new /etc/open5gs/smf.yaml
 
 log_info "✏️  Editing sgwc.yaml ..."
