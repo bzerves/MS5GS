@@ -56,6 +56,7 @@ dpkg -s open5gs-mme &> /dev/null || { log_error "open5gs-mme package not found a
 log_info "Open5GS core packages installed."
 
 log_step "Installing Required Utilities (iptables, persistence tools)"
-apt-get install -y iptables iptables-persistent || { log_error "Failed to install required utilities (iptables, iptables-persistent)"; exit 1; }
+apt-get install -y iptables iptables-persistent yq || { log_error "Failed to install required utilities (iptables, iptables-persistent, yq)"; exit 1; }
 if ! command -v iptables &> /dev/null; then log_error "iptables command not found after installation attempt."; exit 1; fi
+if ! command -v yq &> /dev/null; then log_error "yq command not found after installation attempt."; exit 1; fi
 log_info "Required base utilities are installed." 
