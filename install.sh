@@ -36,13 +36,11 @@ while true; do
     echo "4. Install NodeJS"
     echo "5. Install Open5GS"
     echo "6. Install Open5GS Web UI"
-    echo "7. Configure SSL with LetsEncrypt"
-    echo "8. Health Check"
-    echo "9. Reboot Services"
-    echo "10. Show eNB Status"
-    echo "11. Exit"
+    echo "7. Health Check"
+    echo "8. Reboot Services"
+    echo "9. Exit"
     echo ""
-    read -p "Select an option (1-11): " choice
+    read -p "Select an option (1-9): " choice
 
     case $choice in
         1)
@@ -70,27 +68,19 @@ while true; do
             sudo bash scripts/install_webui.sh
             ;;
         7)
-            echo -e "\n${YELLOW}Configuring SSL with LetsEncrypt...${NC}"
-            sudo bash scripts/configure_ssl.sh
-            ;;
-        8)
             echo -e "\n${YELLOW}Running health check...${NC}"
             sudo bash scripts/health_check.sh
             ;;
-        9)
+        8)
             echo -e "\n${YELLOW}Rebooting Open5GS services...${NC}"
             sudo bash scripts/reboot_services.sh
             ;;
-        10)
-            echo -e "\n${YELLOW}Showing eNB Status...${NC}"
-            sudo bash scripts/show_enb_status.sh
-            ;;
-        11)
+        9)
             echo -e "\n${GREEN}Exiting...${NC}"
             exit 0
             ;;
         *)
-            echo -e "${RED}Invalid option. Please select 1-11.${NC}"
+            echo -e "${RED}Invalid option. Please select 1-9.${NC}"
             ;;
     esac
 done 
