@@ -39,9 +39,10 @@ while true; do
     echo "7. Configure SSL with LetsEncrypt"
     echo "8. Health Check"
     echo "9. Reboot Services"
-    echo "10. Exit"
+    echo "10. Show eNB Status"
+    echo "11. Exit"
     echo ""
-    read -p "Select an option (1-10): " choice
+    read -p "Select an option (1-11): " choice
 
     case $choice in
         1)
@@ -81,11 +82,15 @@ while true; do
             sudo bash scripts/reboot_services.sh
             ;;
         10)
+            echo -e "\n${YELLOW}Showing eNB Status...${NC}"
+            sudo bash scripts/show_enb_status.sh
+            ;;
+        11)
             echo -e "\n${GREEN}Exiting...${NC}"
             exit 0
             ;;
         *)
-            echo -e "${RED}Invalid option. Please select 1-10.${NC}"
+            echo -e "${RED}Invalid option. Please select 1-11.${NC}"
             ;;
     esac
 done 
