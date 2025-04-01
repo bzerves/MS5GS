@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Source the logo
+source "$(dirname "$0")/logo.sh"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -92,26 +95,10 @@ draw_bar() {
     printf "%-20s [${color}%s${NC}%s] %6.2f Mbps\n" "$label" "$filled" "$empty" "$mbps"
 }
 
-display_logo() {
-cat << "EOF"
-
-  _____                    _       _   _____    _____    _____ 
- |  __ \                  (_)     | | | ____|  / ____|  / ____|
- | |__) |   __ _   _ __    _    __| | | |__   | |  __  | (___  
- |  _  /   / _\`| | '_ \  | |  / _\`| |___ \  | | |_ |  \___  \ 
- | | \ \  | (_| | | |_) | | | | (_| |  ___) | | |__| |  ____) |
- |_|  \_\  \__,_| | .__/  |_|  \__,_| |____/   \_____| |_____/ 
-                  | |                                          
-                  |_|                                          
-
-EOF
-}
-
 display_throughput() {
     clear
-    display_logo
-    echo                      # 1 line after logo
-    echo -e "${BLUE}\033[1mEPC Throughput Monitor${NC}"  # Bold title
+    draw_logo
+    echo -e "${WHITE}\033[1m📊 EPC THROUGHPUT MONITOR${NC}"
     echo                      # 1 line after title
     echo -e "${YELLOW}Monitoring: \033[38;5;214m$WAN_IF${NC} (WAN, $WAN_IP) | \033[38;5;214m$MGMT_IF${NC} (MGMT, $MGMT_IP)"
     echo                      # Padding before bars
@@ -122,7 +109,7 @@ display_throughput() {
     tput civis
 
     while true; do
-        read -t 0.25 -n 1 key && [[ "$key" == "q" ]] && break
+        read -t 0.25 -n 1 key && [[ "$key" == "q" || "$key" == "Q" ]] && break
 
         stats=$(ifstat -i "$WAN_IF","$MGMT_IF" 0.5 1 2>/dev/null | tail -n 1)
         read -r wan_rx wan_tx mgmt_rx mgmt_tx <<< "$stats"

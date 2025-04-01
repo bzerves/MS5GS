@@ -30,17 +30,17 @@ EOF
 while true; do
     echo -e "\n${GREEN}=== Rapid5GS Installation Menu ===${NC}"
     echo ""
-    echo "1. Check System Requirements"
-    echo "2. Configure Installation"
-    echo "3. Install MongoDB"
-    echo "4. Install NodeJS"
-    echo "5. Install Open5GS"
-    echo "6. Install Open5GS Web UI"
-    echo "7. Health Check"
-    echo "8. Reboot Services"
-    echo "9. Exit"
+    echo "1. 🔍 Check System Requirements"
+    echo "2. ⚙️  Configure Installation"
+    echo "3. 🗄️  Install MongoDB"
+    echo "4. 💻 Install NodeJS"
+    echo "5. 📡 Install Open5GS"
+    echo "6. 🌐 Install Open5GS Web UI"
+    echo "7. 🏥 Health Check"
+    echo "8. 🔄 Reboot Services"
+    echo "9. 👋 Exit"
     echo ""
-    read -p "Select an option (1-9): " choice
+    read -p "Enter an option (1-9) and press enter: " choice
 
     case $choice in
         1)
