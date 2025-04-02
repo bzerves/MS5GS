@@ -1,20 +1,50 @@
 #!/bin/bash
 
+# Ensure this script is run as root
+if [[ "$EUID" -ne 0 ]]; then
+  echo "[ERROR] This script must be run as root. Use: sudo $0"
+  exit 1
+fi
+
+# Ensure gawk is installed and available
+if ! command -v gawk >/dev/null 2>&1; then
+    echo "[INFO] gawk not found. Installing..."
+    apt update && apt install -y gawk
+    if ! command -v gawk >/dev/null 2>&1; then
+        echo "[ERROR] gawk installation failed. Exiting."
+        exit 1
+    fi
+fi
+
 CACHE_FILE="/var/lib/rapid5gs/enb_cache.json"
-TMP_LOG="/tmp/enb_log.tmp"
+TMP_LOG=$(mktemp /tmp/enb_log.XXXXXX)
 PING_TIMEOUT=2
 JOURNAL_LINES=5000
 
 echo "[INFO] Starting monitor_enbs__update_cache.sh..."
 
+# Create the data directory if needed, and set correct permissions
 if [ ! -d "/var/lib/rapid5gs" ]; then
-    sudo mkdir -p /var/lib/rapid5gs
-    sudo chown "$USER:$USER" /var/lib/rapid5gs
+    echo "[INFO] Creating cache directory..."
+    mkdir -p /var/lib/rapid5gs
+    chown root:root /var/lib/rapid5gs
+    chmod 755 /var/lib/rapid5gs
 fi
 
+# Initialize the JSON cache file if it doesn't exist
 if [ ! -f "$CACHE_FILE" ]; then
+    echo "[INFO] Creating new cache file at $CACHE_FILE"
     echo "[]" > "$CACHE_FILE"
+    chmod 644 "$CACHE_FILE"
 fi
+
+# Ensure cache file is writable by the current user (root)
+if [ ! -w "$CACHE_FILE" ]; then
+    echo "[ERROR] Cache file is not writable: $CACHE_FILE"
+    exit 1
+fi
+
+echo "[INFO] Using TMP_LOG: $TMP_LOG"
 
 update_enb_cache() {
     local cell_ip="$1"
@@ -175,20 +205,36 @@ update_ping_times() {
 
 echo "[INFO] Parsing logs..."
 
-sudo journalctl -u open5gs-mmed -n "$JOURNAL_LINES" | \
-grep -E 'eNB-S1 accepted\[[0-9\.]+(:[0-9]+)?\]|eNB-S1\[[0-9\.]+\] (connection refused|max_num_of_ostreams)' | \
-sed -n -E \
-    -e 's/.*eNB-S1 accepted\[([0-9\.]+)(:[0-9]+)?\].*/\1 ATTACHED/p' \
-    -e 's/.*eNB-S1\[([0-9\.]+)\] connection refused.*/\1 DETACHED/p' \
-    -e 's/.*eNB-S1\[([0-9\.]+)\] max_num_of_ostreams.*/\1 ATTACHED/p' \
-    > "$TMP_LOG"
+sudo journalctl -u open5gs-mmed --since "24 hours ago" --output=short-unix | \
+grep -E 'eNB-S1 accepted\[[0-9\.]+(:[0-9]+)?\]|eNB-S1 accepted\[[0-9\.]+\]:[0-9]+|eNB-S1\[[0-9\.]+\] (connection refused|max_num_of_ostreams)' | \
+gawk '
+{
+    ts = strftime("%Y-%m-%d %H:%M:%S", $1);  # convert UNIX timestamp to readable format
+    line = substr($0, index($0,$2))          # get the message part
+
+    if (match(line, /eNB-S1 accepted\[([0-9\.]+)(:[0-9]+)?\]/, m)) {
+        ip = m[1]; state = "ATTACHED"
+    } else if (match(line, /eNB-S1 accepted\[([0-9\.]+)\]:[0-9]+/, m)) {
+        ip = m[1]; state = "ATTACHED"
+    } else if (match(line, /eNB-S1\[([0-9\.]+)\] connection refused/, m)) {
+        ip = m[1]; state = "DETACHED"
+    } else if (match(line, /eNB-S1\[([0-9\.]+)\] max_num_of_ostreams/, m)) {
+        ip = m[1]; state = "ATTACHED"
+    } else {
+        next
+    }
+
+    print ts, ip, state
+}' > "$TMP_LOG"
 
 echo "[DEBUG] TMP_LOG contents:"
 cat "$TMP_LOG"
 
-tac "$TMP_LOG" | awk '!seen[$1]++ {print $1, $2}' | while read -r ip status; do
-    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+tac "$TMP_LOG" | awk '!seen[$3]++' | while read -r date time ip status; do
+    timestamp="${date} ${time}"
     update_enb_cache "$ip" "$(echo "$status" | tr A-Z a-z)" "$timestamp"
 done
 
 update_ping_times
+
+rm -f "$TMP_LOG"

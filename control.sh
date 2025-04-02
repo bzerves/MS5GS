@@ -22,7 +22,8 @@ function draw_menu() {
     echo ""
     echo "1. 📊 View EPC Throughput"
     echo "2. 📶 View eNB Status"
-    echo "3. 👋 Exit"
+    echo "3. 📝 Live Tail MME"
+    echo "4. 👋 Exit"
     echo ""
 }
 
@@ -31,7 +32,7 @@ draw_menu
 
 # Main menu
 while true; do
-    read -p "Enter an option (1-3) and press enter: " choice
+    read -p "Enter an option (1-4) and press enter: " choice
 
     case $choice in
         1)
@@ -43,11 +44,15 @@ while true; do
             draw_menu
             ;;
         3)
+            sudo journalctl -u open5gs-mmed -f
+            draw_menu
+            ;;
+        4)
             echo -e "\n${GREEN}Exiting...${NC}"
             exit 0
             ;;
         *)
-            echo -e "${RED}Invalid option. Please select 1-3.${NC}"
+            echo -e "${RED}Invalid option. Please select 1-4.${NC}"
             ;;
     esac
 done 
