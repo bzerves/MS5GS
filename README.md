@@ -138,4 +138,4 @@ I'm available for hire to help deploy this EPC in your network. I also provide o
 - Software automation
 - And more
 
-Contact me for more information via email at josh@lambertmail.xyz.
+Contact me for more information on my personal website here: [https://joshlambert.xyz/contact/](https://joshlambert.xyz/contact/).
