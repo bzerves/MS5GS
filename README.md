@@ -1,4 +1,3 @@
-```
   _____                    _       _   _____    _____    _____ 
  |  __ \                  (_)     | | | ____|  / ____|  / ____|
  | |__) |   __ _   _ __    _    __| | | |__   | |  __  | (___  
@@ -8,108 +7,111 @@
                   | |                                          
                   |_|                                          
 
-```
 # Rapid5GS
 
-Rapid5GS is a comprehensive installation and configuration tool for Open5GS on Ubuntu 24.04 LTS or Debian 12. It automates the setup of a mobility core network using Open5GS, including all necessary dependencies and configurations.
+## What is a Mobility Core?
 
-## Prerequisites
+In mobile telecommunications, the Mobility Core (known as EPC in 4G or 5GC in 5G) is the central nervous system of your mobile network. It's responsible for:
 
-- Ubuntu Server 24.04 LTS or Debian 12
-- Root privileges (sudo access)
-- Internet connection
-- At least 4GB RAM
-- At least 20GB free disk space
-- At least 2 network interfaces (physical or virtual) on the server you're deploying this EPC on.
+- Managing user authentication and security
+- Handling voice and data connections
+- Routing traffic between users and the internet
+- Managing network resources and quality of service
+- Supporting mobility as users move between cells
 
-## Installation
+Think of it as the "brain" of your mobile network - without it, your base stations (eNodeBs/gNodeBs) would be like disconnected islands with no way to communicate with each other or the outside world.
 
-1. Install Ubuntu Server 24.04 LTS or Debian on a server with two network interfaces.
+## The Problem
 
-2. Setup sudo utility and add your user to it.
+Setting up a mobile core network has traditionally been a nightmare:
 
-3. Run the following one-liner command as a user with sudo privileges:
+1. **Commercial Solutions**: Enterprise-grade solutions from companies like Nokia, Ericsson, or Huawei, while powerful, require significant monetary investment and specialized expertise to deploy.
+
+2. **Open Source Options**: While open-source solutions like Open5GS and Magma exist, they're notoriously difficult to configure. You need to:
+   - Manually install dozens of dependencies
+   - Configure complex networking rules
+   - Set up databases and web interfaces
+   - Deal with cryptic error messages
+   - Spend days or weeks getting everything working
+
+3. **Documentation**: Most documentation assumes you're already a mobility 4G/5G expert, making it nearly impossible for newcomers to get started.
+
+## The Solution: Rapid5GS
+
+Rapid5GS is a one-command solution that automates the entire process of setting up a production-ready Open5GS core network for fixed wireless operators. It:
+
+- Works with both 4G (EPC) and 5G (5GC) networks
+- Handles all dependencies automatically
+- Configures networking and security
+- Sets up monitoring and management tools
+- Provides a user-friendly web interface
+- Includes health checks and troubleshooting tools
+
+### Quick Start
+
+Just run this one command on Ubuntu 24.04 LTS or Debian 12:
+
 ```bash
 git clone https://github.com/joshualambert/rapid5gs.git && cd rapid5gs && chmod +x install.sh && sudo ./install.sh
 ```
 
-## Installation Menu Options
+### System Requirements
 
-The installation script provides the following options:
+- Ubuntu Server 24.04 LTS or Debian 12
+- Root privileges (sudo access)
+- At least 4GB RAM
+- At least 20GB free disk space
+- 2 physical network interfaces
 
-1. **Check System Requirements**
-   - Verifies system compatibility
-   - Confirms running on supported Debian 12 or Ubuntu 24.04 LTS Linux.
-   - Validates network interfaces
-   - Ensures sufficient RAM and storage
+> **IMPORTANT**: Rapid5GS is only tested and developed against fresh installations of Ubuntu 24.04 LTS or Debian 12. It is HIGHLY ADVISED to install this on a fresh copy of these operating systems before installing any other packages or making system modifications.
 
-2. **Configure Installation**
-   - Sets up network interfaces
-   - Configures PLMN (MCC/MNC)
-   - Creates necessary configuration files
+### Features
 
-3. **Install MongoDB**
-   - Installs and configures MongoDB
-   - Sets up the database for Open5GS
+- **Automated Installation**: Step-by-step menu guides you through the entire process
+- **Network Configuration**: Automatically sets up all required networking rules
+- **Health Monitoring**: Built-in tools to monitor network performance and troubleshoot issues
+- **Web Interface**: Easy-to-use dashboard for managing your network
+- **Hybrid Support**: Works with both 4G and 5G networks simultaneously
 
-4. **Install NodeJS**
-   - Installs NodeJS and npm
-   - Required for the Web UI
+### Network Control Interface
 
-5. **Install Open5GS**
-   - Adds Open5GS PPA repository
-   - Installs Open5GS core packages
-   - Configures network interfaces
-   - Sets up IP forwarding and firewall rules
+After installation, you can monitor and control your network using the built-in control interface:
 
-6. **Install Open5GS Web UI**
-   - Installs the web-based management interface
-   - Configures web server
+```bash
+chmod +x control.sh && sudo ./control.sh
+```
 
-7. **Configure SSL with LetsEncrypt**
-   - Sets up SSL certificates
-   - Configures secure web access
+The control interface provides several powerful tools:
 
-8. **Health Check**
-   - Verifies service status
-   - Checks network connectivity
-   - Validates configurations
+1. **EPC Throughput Monitor**: Real-time view of network traffic and performance
+2. **eNB Status**: Monitor connected base stations and their status
+3. **UE Status**: Track connected user devices and their activities
+4. **Live MME Logs**: Real-time monitoring of the Mobility Management Entity
+5. **Live SMF Logs**: Real-time monitoring of the Session Management Function
 
-9. **Reboot Services**
-   - Restarts all Open5GS services
-   - Applies configuration changes
+This interface makes it easy to monitor your network's health and troubleshoot issues without diving into complex configuration files or logs.
 
-10. **Exit**
-    - Exits the installation script
+### Current Limitations
 
-## Usage
+- **NAT Mode Only**: Currently, the system only supports NAT mode for user traffic. All NAT operations are performed on the local machine.
+- **Future Enhancements**: Support for routed IP pools and upstream NAT is planned for future releases.
+- **Single Instance**: The current version is designed for single-instance deployment. Clustering support will be added in future releases.
 
-It is intended that you'll install Ubuntu Server 24.04 LTS or Debian 12 on a server with two network interfaces. Then run this script, one step at a time in order, to fully deploy this core. It is expected that the upstream routers from this EPC will assign both NICs a static IP address via DHCP. No need to configure those on the EPC itself - let routers route!
+### Supported Hardware
 
-## Configuration Files
+#### Base Stations (eNodeBs)
+The following 4G base stations have been tested and verified to work with Rapid5GS:
+- Airspan AirHarmony and AirSpeed units
+- Nokia AZQC CBRS
+- Baicells 436q and Nova 233
 
-The following configuration files are created during installation:
+While theoretically any standards-compliant 4G eNodeB should work, only the above units have been thoroughly tested. 5G hardware support is planned but not yet tested.
 
-- `/etc/open5gs/install.conf`: Main installation configuration
-- `/etc/open5gs/mme.yaml`: MME configuration
-- `/etc/open5gs/sgwc.yaml`: SGW-C configuration
-- `/etc/open5gs/smf.yaml`: SMF configuration
-- `/etc/open5gs/amf.yaml`: AMF configuration
-- `/etc/open5gs/upf.yaml`: UPF configuration
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
-
-## Maintainer
-
-- **Josh Lambert**
-  - Website: [joshlambert.xyz](https://joshlambert.xyz)
-  - Email: josh@lambertmail.xyz
+#### User Equipment (UEs)
+The following user devices have been tested and verified:
+- Global Telecom Titan 4000 (our recommended choice for best performance)
+- BEC RidgeWave
+- Airspan AirSpot UEs
 
 ## Acknowledgments
 
