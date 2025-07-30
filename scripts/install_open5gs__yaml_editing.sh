@@ -47,6 +47,7 @@ yq -y '
 log_info "✏️  Editing mme.yaml ..."
 yq -y '
   .mme.s1ap.server[0].address = env.MGMT_IP_ADDR |
+  .mme.gtpc.client.sgwc[0].address = "127.0.0.5" |
   .mme.gummei[0].plmn_id.mcc = (env.MCC | tonumber) |
   .mme.gummei[0].plmn_id.mnc = (env.MNC | tonumber) |
   .mme.tai[0].plmn_id.mcc = (env.MCC | tonumber) |
