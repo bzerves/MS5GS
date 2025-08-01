@@ -63,7 +63,7 @@ get_ip_from_selection() {
 # Function to get interface from IP
 get_interface_from_ip() {
     local ip=$1
-    ip addr show | grep "$ip" | awk '{print $7}'
+    ip -4 -o addr show | awk -v ip="$ip" '$4 ~ ("^" ip "/") {print $2; exit}'
 }
 
 # Network Interface Configuration
@@ -78,7 +78,8 @@ while true; do
     if [[ $mgmt_num =~ ^[0-9]+$ ]]; then
         mgmt_ip=$(get_ip_from_selection "$mgmt_num")
         if [ ! -z "$mgmt_ip" ]; then
-            mgmt_interface=$(get_interface_from_ip "$mgmt_ip")
+            mgmt_ip_addr=$(echo "$mgmt_ip" | cut -d'/' -f1)
+            mgmt_interface=$(get_interface_from_ip "$mgmt_ip_addr")
             break
         else
             echo -e "${RED}Invalid selection. Please choose a number from the list.${NC}"
@@ -96,7 +97,8 @@ while true; do
     if [[ $user_wan_num =~ ^[0-9]+$ ]]; then
         user_wan_ip=$(get_ip_from_selection "$user_wan_num")
         if [ ! -z "$user_wan_ip" ]; then
-            user_wan_interface=$(get_interface_from_ip "$user_wan_ip")
+            user_wan_ip_addr=$(echo "$user_wan_ip" | cut -d'/' -f1)
+            user_wan_interface=$(get_interface_from_ip "$user_wan_ip_addr")
             break
         else
             echo -e "${RED}Invalid selection. Please choose a number from the list.${NC}"
