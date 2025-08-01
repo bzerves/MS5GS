@@ -110,9 +110,15 @@ done
 
 # Get PLMN Configuration
 echo -e "\n${YELLOW}Configuring PLMN (Public Land Mobile Network)...${NC}"
+echo -e "${GREEN}Tip: Just press Enter to use the default values shown in brackets${NC}"
+
 while true; do
-    read -p "Enter Mobile Country Code (MCC, 3 digits, e.g., 310): " mcc
-    if [[ $mcc =~ ^[0-9]{3}$ ]]; then
+    read -p "Enter Mobile Country Code (MCC, 3 digits) [default: 901]: " mcc
+    if [ -z "$mcc" ]; then
+        mcc="901"
+        echo -e "${GREEN}Using default MCC: 901${NC}"
+        break
+    elif [[ $mcc =~ ^[0-9]{3}$ ]]; then
         break
     else
         echo -e "${RED}Invalid MCC. Please enter exactly 3 digits.${NC}"
@@ -120,8 +126,12 @@ while true; do
 done
 
 while true; do
-    read -p "Enter Mobile Network Code (MNC, 2-3 digits, e.g., 260): " mnc
-    if [[ $mnc =~ ^[0-9]{2,3}$ ]]; then
+    read -p "Enter Mobile Network Code (MNC, 2-3 digits) [default: 70]: " mnc
+    if [ -z "$mnc" ]; then
+        mnc="70"
+        echo -e "${GREEN}Using default MNC: 70${NC}"
+        break
+    elif [[ $mnc =~ ^[0-9]{2,3}$ ]]; then
         break
     else
         echo -e "${RED}Invalid MNC. Please enter 2 or 3 digits.${NC}"
@@ -130,8 +140,12 @@ done
 
 # Get Tracking Area Code
 while true; do
-    read -p "Enter Tracking Area Code (TAC, 1-5 digits, e.g., 1): " tac
-    if [[ $tac =~ ^[0-9]{1,5}$ ]]; then
+    read -p "Enter Tracking Area Code (TAC, 1-5 digits) [default: 10]: " tac
+    if [ -z "$tac" ]; then
+        tac="10"
+        echo -e "${GREEN}Using default TAC: 10${NC}"
+        break
+    elif [[ $tac =~ ^[0-9]{1,5}$ ]]; then
         break
     else
         echo -e "${RED}Invalid TAC. Please enter 1-5 digits.${NC}"
