@@ -19,8 +19,13 @@ if [ -z "$UE_SUBNET" ]; then
 fi
 
 # --- Set LTE WAN Interface ---
-LTE_WAN_INTERFACE="enx70886b8735c9"
-log_info "Using LTE WAN interface as system default: $LTE_WAN_INTERFACE"
+if [ -n "$USER_WAN_INTERFACE" ] && [ "$USER_WAN_INTERFACE" != "dynamic" ]; then
+    LTE_WAN_INTERFACE="$USER_WAN_INTERFACE"
+    log_info "Using LTE WAN interface from config: $LTE_WAN_INTERFACE"
+else
+    log_error "USER_WAN_INTERFACE not found in configuration or still set to 'dynamic'. Please run configure_installation.sh first."
+    exit 1
+fi
 
 # Validate that the LTE WAN interface exists
 if ! ip link show "$LTE_WAN_INTERFACE" &> /dev/null; then
