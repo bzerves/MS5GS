@@ -27,6 +27,9 @@ function draw_menu() {
     echo "5. 📝 Live Tail SMF (Session Management Function)"
     echo "6. 👋 Exit"
     echo ""
+    echo -e "${YELLOW}Note: Pro version of Rapid5GS is in development — learn more at https://theedgemile.com/rapid5gspro${NC}"
+    echo -e "${YELLOW}Note: Complete refurbished Nokia AirScale sites for sale — help fund Rapid5GS development: https://theedgemile.com/nokia${NC}"
+    echo ""
 }
 
 # Initial draw
