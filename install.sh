@@ -40,6 +40,9 @@ while true; do
     echo "8. 🔄 Reboot Services"
     echo "9. 👋 Exit"
     echo ""
+    echo -e "${YELLOW}Note: Pro version of Rapid5GS is in development — learn more at https://theedgemile.com/rapid5gspro${NC}"
+    echo -e "${YELLOW}Note: Complete refurbished Nokia AirScale sites for sale — purchasing helps fund Rapid5GS development! See: https://theedgemile.com/nokia${NC}"
+    echo ""
     read -p "Enter an option (1-9) and press enter: " choice
 
     case $choice in
@@ -83,4 +86,4 @@ while true; do
             echo -e "${RED}Invalid option. Please select 1-9.${NC}"
             ;;
     esac
-done 
+done
