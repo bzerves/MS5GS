@@ -11,6 +11,12 @@
 
 # Rapid5GS
 
+> PRO VERSION IN DEVELOPMENT — 50% OFF PRE‑SALE
+>
+> Rapid5GS Pro adds a beautiful web UI, routed IP pools, a real‑time view of which subscribers are attached to which eNodeBs, easier network‑wide APN management, bulk subscriber tools, session control, and more. Purchasing now helps fund development of both Rapid5GS Pro and this open‑source version.
+>
+> Get it here: [Rapid5GS Pro at TheEdgeMile.com](https://theedgemile.com/product/rapid5gs-pro/)
+
 ## What is a Mobility Core?
 
 In mobile telecommunications, the Mobility Core (known as EPC in 4G or 5GC in 5G) is the central nervous system of your mobile network. It's responsible for:
@@ -139,3 +145,11 @@ I'm available for hire to help deploy this EPC in your network. I also provide o
 - And more
 
 Contact me for more information on my personal website here: [https://joshlambert.xyz/contact/](https://joshlambert.xyz/contact/).
+
+## Hardware: Refurbished Nokia LTE AirScale Site Kits
+
+Looking to deploy quickly? We offer fully tested and refurbished Nokia AZQC CBRS LTE site kits with sectors, low‑PIM jumpers, SFP/SFP+ modules, RRHs, BBU components, and more — everything you need except DC power and fiber plant. Purchasing these kits helps fund the continued development of Rapid5GS.
+
+Learn more or purchase here:
+
+- [Nokia AZQC 3‑Sector CBRS Site Kit (Tested, 4T4R RRHs + Antennas + Rapid5GS Consulting)](https://theedgemile.com/product/nokia-azqc-3-sector-cbrs-site-kit-tested-4t4r-rrhs-antennas-rapid5gs-consulting/)
