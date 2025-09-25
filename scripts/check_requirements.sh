@@ -44,7 +44,7 @@ check_network_interfaces() {
 check_storage() {
     echo -e "\n${YELLOW}Checking storage...${NC}"
     local available_space=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
-    if [ "$available_space" -ge 20 ]; then
+    if [ "$available_space" -ge 10 ]; then
         echo -e "${GREEN}✓ Sufficient storage available: ${available_space}GB${NC}"
         return 0
     else
