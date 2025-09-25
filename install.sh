@@ -25,49 +25,49 @@ EOF
 
 # Main menu
 while true; do
-    echo -e "\n${GREEN}=== Rapid5GS Installation Menu ===${NC}"
+    echo -e "\n${GREEN}=== MS5GS Menu de Instalação ===${NC}"
     echo ""
-    echo "1. 🔍 Check System Requirements"
-    echo "2. ⚙️  Configure Installation"
-    echo "3. 🗄️  Install MongoDB"
-    echo "4. 💻 Install NodeJS"
-    echo "5. 📡 Install Open5GS"
-    echo "6. 🌐 Install Open5GS Web UI"
+    echo "1. 🔍 Checar requisitos"
+    echo "2. ⚙️  Configurar instalação"
+    echo "3. 🗄️  Instalar MongoDB"
+    echo "4. 💻 Instalar NodeJS"
+    echo "5. 📡 Instalar Open5GS"
+    echo "6. 🌐 Instalar Open5GS Web UI"
     echo "7. 🏥 Health Check"
     echo "8. 🔄 Reboot Services"
-    echo "9. 👋 Exit"
+    echo "9. 👋 Sair"
     echo ""
     echo -e "${YELLOW}Nota: Versão PRO com suporte em https://meusys.com.br${NC}"
     echo ""
-    read -p "Enter an option (1-9) and press enter: " choice
+    read -p "Escolha uma opção (1-9) e pressione enter: " choice
 
     case $choice in
         1)
-            echo -e "\n${YELLOW}Checking system requirements...${NC}"
+            echo -e "\n${YELLOW}Checando...${NC}"
             sudo bash scripts/check_requirements.sh
             ;;
         2)
-            echo -e "\n${YELLOW}Running installation configuration...${NC}"
+            echo -e "\n${YELLOW}Rodando configuração...${NC}"
             sudo bash scripts/configure_installation.sh
             ;;
         3)
-            echo -e "\n${YELLOW}Installing MongoDB...${NC}"
+            echo -e "\n${YELLOW}Instalando MongoDB...${NC}"
             sudo bash scripts/install_mongodb.sh
             ;;
         4)
-            echo -e "\n${YELLOW}Installing NodeJS...${NC}"
+            echo -e "\n${YELLOW}Instalando NodeJS...${NC}"
             sudo bash scripts/install_nodejs.sh
             ;;
         5)
-            echo -e "\n${YELLOW}Installing Open5GS...${NC}"
+            echo -e "\n${YELLOW}Instalando Open5GS...${NC}"
             sudo bash scripts/install_open5gs.sh
             ;;
         6)
-            echo -e "\n${YELLOW}Installing Open5GS Web UI...${NC}"
+            echo -e "\n${YELLOW}Instalando Open5GS Web UI...${NC}"
             sudo bash scripts/install_webui.sh
             ;;
         7)
-            echo -e "\n${YELLOW}Running health check...${NC}"
+            echo -e "\n${YELLOW}Rodando health check...${NC}"
             sudo bash scripts/health_check.sh
             ;;
         8)
@@ -75,7 +75,7 @@ while true; do
             sudo bash scripts/reboot_services.sh
             ;;
         9)
-            echo -e "\n${GREEN}Exiting...${NC}"
+            echo -e "\n${GREEN}Saindo...${NC}"
             exit 0
             ;;
         *)
