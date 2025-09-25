@@ -36,7 +36,7 @@ draw_menu
 
 # Main menu
 while true; do
-    read -p "Enter an option (1-6) and press enter: " choice
+    read -p "Escolha uma opção (1-6) e pressione enter: " choice
 
     case $choice in
         1)
@@ -64,7 +64,7 @@ while true; do
             exit 0
             ;;
         *)
-            echo -e "${RED}Invalid option. Please select 1-6.${NC}"
+            echo -e "${RED}Inválido, escolha de 1-6.${NC}"
             ;;
     esac
 done 
