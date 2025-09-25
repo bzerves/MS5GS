@@ -20,15 +20,14 @@ function draw_menu() {
     draw_logo
     echo -e "\n${GREEN}=== Rapid5GS Control Panel ===${NC}"
     echo ""
-    echo "1. 📊 View EPC Throughput"
-    echo "2. 📶 View eNB Status"
-    echo "3. 📱 View UE Status"
+    echo "1. 📊 Ver EPC Throughput"
+    echo "2. 📶 Ver eNB Status"
+    echo "3. 📱 Ver UE Status"
     echo "4. 📝 Live Tail MME (Mobile Management Entity)"
     echo "5. 📝 Live Tail SMF (Session Management Function)"
-    echo "6. 👋 Exit"
+    echo "6. 👋 Sair"
     echo ""
-    echo -e "${YELLOW}Note: Pro version of Rapid5GS is in development — learn more at https://theedgemile.com/rapid5gspro${NC}"
-    echo -e "${YELLOW}Note: Complete refurbished Nokia AirScale sites for sale — help fund Rapid5GS development: https://theedgemile.com/nokia${NC}"
+    echo -e "${YELLOW}Nota: Versão PRO com suporte disponível em https://meusys.com.br${NC}"
     echo ""
 }
 
