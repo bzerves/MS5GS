@@ -18,7 +18,7 @@ command_exists() {
 function draw_menu() {
     clear
     draw_logo
-    echo -e "\n${GREEN}=== Rapid5GS Control Panel ===${NC}"
+    echo -e "\n${GREEN}=== MS5GS Control Panel ===${NC}"
     echo ""
     echo "1. 📊 Ver EPC Throughput"
     echo "2. 📶 Ver eNB Status"
